@@ -3,18 +3,9 @@
 //=============================================================================================
 #include "framework.h"
 
-struct Material {
-    vec3 ka, kd, ks;
-    float shininess;
-
-    Material(vec3 _kd, vec3 _ks, float _shininess) : ka(_kd * M_PI), kd(_kd), ks(_ks) { shininess = _shininess; }
-};
-
 struct Hit {
     float t;
     vec3 position, normal;
-    Material *material;
-
     Hit() { t = -1; }
 };
 
@@ -28,8 +19,6 @@ struct Ray {
 };
 
 class Intersectable {
-protected:
-    Material *material;
 public:
     virtual Hit intersect(const Ray &ray) = 0;
 };
@@ -38,10 +27,9 @@ struct Sphere : public Intersectable {
     vec3 center;
     float radius;
 
-    Sphere(const vec3 &_center, float _radius, Material *_material) {
+    Sphere(const vec3 &_center, float _radius) {
         center = _center;
         radius = _radius;
-        material = _material;
     }
 
     Hit intersect(const Ray &ray) {
@@ -59,7 +47,6 @@ struct Sphere : public Intersectable {
         hit.t = (t2 > 0) ? t2 : t1;
         hit.position = ray.start + ray.dir * hit.t;
         hit.normal = (hit.position - center) * (1.0f / radius);
-        hit.material = material;
         return hit;
     }
 };
@@ -69,111 +56,118 @@ struct Cube : public Intersectable {
     float side_dimension; // length of the side of the cube
 
 
-    Cube(const vec3 &_center, float _side_dimension, Material *_material) {
+    Cube(const vec3 &_center, float _side_dimension) {
         center = _center;
         side_dimension = _side_dimension;
-        material = _material;
     }
-
-    struct CubeIntersect{
-        vec3 normal;
-        float t;
-        vec3 position;
-
-        CubeIntersect(vec3 _normal, float _t, vec3 _position){
-            normal = _normal;
-            t = _t;
-            position = _position;
-        }
-
-        CubeIntersect(){
-            t = -1;
-        }
-    };
-
 
     // should result negative t parameter if no intersect is found
     Hit intersect(const Ray &ray) {
         Hit hit;
-        CubeIntersect intersections[6];
+        std::pair<vec3, float> intersections[6];
+        vec3 normals[6];
         int numIntersections = 0;
         vec3 centerOfTop = center + vec3(0, side_dimension / 2, 0);
         vec3 normalOfTop = vec3(0, 1, 0);
-        CubeIntersect Top = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfTop, normalOfTop);
-        if (Top.position.y < centerOfTop.y + side_dimension / 2 && Top.position.y > centerOfTop.y - side_dimension / 2 &&
-            Top.position.x < centerOfTop.x + side_dimension / 2 && Top.position.x > centerOfTop.x - side_dimension / 2 &&
-            Top.position.z < centerOfTop.z + side_dimension / 2 && Top.position.z > centerOfTop.z - side_dimension / 2) {
-            intersections[numIntersections++] = Top;
+        std::pair<vec3, float> Top = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfTop, normalOfTop);
+        if (Top.first.y < centerOfTop.y + side_dimension / 2 && Top.first.y > centerOfTop.y - side_dimension / 2 &&
+            Top.first.x < centerOfTop.x + side_dimension / 2 && Top.first.x > centerOfTop.x - side_dimension / 2 &&
+            Top.first.z < centerOfTop.z + side_dimension / 2 && Top.first.z > centerOfTop.z - side_dimension / 2) {
+            intersections[numIntersections] = Top;
+            normals[numIntersections++] = normalOfTop;
         }
 
         vec3 centerOfBottom = center - vec3(0, side_dimension / 2, 0);
         vec3 normalOfBottom = vec3(0, -1, 0);
-        CubeIntersect Bottom = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfBottom, normalOfBottom);
-        if (Bottom.position.y < centerOfBottom.y + side_dimension / 2 &&
-            Bottom.position.y > centerOfBottom.y - side_dimension / 2 &&
-            Bottom.position.x < centerOfBottom.x + side_dimension / 2 &&
-            Bottom.position.x > centerOfBottom.x - side_dimension / 2 &&
-            Bottom.position.z < centerOfBottom.z + side_dimension / 2 &&
-            Bottom.position.z > centerOfBottom.z - side_dimension / 2) {
-            intersections[numIntersections++] = Bottom;
+        std::pair<vec3, float> Bottom = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfBottom,
+                                                                           normalOfBottom);
+        if (Bottom.first.y < centerOfBottom.y + side_dimension / 2 &&
+            Bottom.first.y > centerOfBottom.y - side_dimension / 2 &&
+            Bottom.first.x < centerOfBottom.x + side_dimension / 2 &&
+            Bottom.first.x > centerOfBottom.x - side_dimension / 2 &&
+            Bottom.first.z < centerOfBottom.z + side_dimension / 2 &&
+            Bottom.first.z > centerOfBottom.z - side_dimension / 2) {
+            intersections[numIntersections] = Bottom;
+            normals[numIntersections++] = normalOfBottom;
         }
 
         vec3 centerOfLeft = center - vec3(side_dimension / 2, 0, 0);
         vec3 normalOfLeft = vec3(-1, 0, 0);
-        CubeIntersect Left = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfLeft, normalOfLeft);
-        if (Left.position.y < centerOfLeft.y + side_dimension / 2 && Left.position.y > centerOfLeft.y - side_dimension / 2 &&
-            Left.position.x < centerOfLeft.x + side_dimension / 2 && Left.position.x > centerOfLeft.x - side_dimension / 2 &&
-            Left.position.z < centerOfLeft.z + side_dimension / 2 && Left.position.z > centerOfLeft.z - side_dimension / 2) {
-            intersections[numIntersections++] = Left;
+        std::pair<vec3, float> Left = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfLeft,
+                                                                         normalOfLeft);
+        if (Left.first.y < centerOfLeft.y + side_dimension / 2 && Left.first.y > centerOfLeft.y - side_dimension / 2 &&
+            Left.first.x < centerOfLeft.x + side_dimension / 2 && Left.first.x > centerOfLeft.x - side_dimension / 2 &&
+            Left.first.z < centerOfLeft.z + side_dimension / 2 && Left.first.z > centerOfLeft.z - side_dimension / 2) {
+            intersections[numIntersections] = Left;
+            normals[numIntersections++] = normalOfLeft;
         }
 
         vec3 centerOfRight = center + vec3(side_dimension / 2, 0, 0);
         vec3 normalOfRight = vec3(1, 0, 0);
-        CubeIntersect Right = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfRight, normalOfRight);
-        if (Right.position.y < centerOfRight.y + side_dimension / 2 &&
-            Right.position.y > centerOfRight.y - side_dimension / 2 &&
-            Right.position.x < centerOfRight.x + side_dimension / 2 &&
-            Right.position.x > centerOfRight.x - side_dimension / 2 &&
-            Right.position.z < centerOfRight.z + side_dimension / 2 &&
-            Right.position.z > centerOfRight.z - side_dimension / 2) {
-            intersections[numIntersections++] = Right;
+        std::pair<vec3, float> Right = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfRight,
+                                                                          normalOfRight);
+        if (Right.first.y < centerOfRight.y + side_dimension / 2 &&
+            Right.first.y > centerOfRight.y - side_dimension / 2 &&
+            Right.first.x < centerOfRight.x + side_dimension / 2 &&
+            Right.first.x > centerOfRight.x - side_dimension / 2 &&
+            Right.first.z < centerOfRight.z + side_dimension / 2 &&
+            Right.first.z > centerOfRight.z - side_dimension / 2) {
+            intersections[numIntersections] = Right;
+            normals[numIntersections++] = normalOfRight;
         }
 
         vec3 centerOfFront = center + vec3(0, 0, side_dimension / 2);
         vec3 normalOfFront = vec3(0, 0, 1);
-        CubeIntersect Front = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfFront, normalOfFront);
-        if (Front.position.y < centerOfFront.y + side_dimension / 2 &&
-            Front.position.y > centerOfFront.y - side_dimension / 2 &&
-            Front.position.x < centerOfFront.x + side_dimension / 2 &&
-            Front.position.x > centerOfFront.x - side_dimension / 2 &&
-            Front.position.z < centerOfFront.z + side_dimension / 2 &&
-            Front.position.z > centerOfFront.z - side_dimension / 2) {
-            intersections[numIntersections++] = Front;
+        std::pair<vec3, float> Front = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfFront,
+                                                                          normalOfFront);
+        if (Front.first.y < centerOfFront.y + side_dimension / 2 &&
+            Front.first.y > centerOfFront.y - side_dimension / 2 &&
+            Front.first.x < centerOfFront.x + side_dimension / 2 &&
+            Front.first.x > centerOfFront.x - side_dimension / 2 &&
+            Front.first.z < centerOfFront.z + side_dimension / 2 &&
+            Front.first.z > centerOfFront.z - side_dimension / 2) {
+            intersections[numIntersections] = Front;
+            normals[numIntersections++] = normalOfFront;
         }
+
+        vec3 centerOfBack = center - vec3(0, 0, side_dimension / 2);
+        vec3 normalOfBack = vec3(0, 0, -1);
+        std::pair<vec3, float> Back = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfBack,
+                                                                         normalOfBack);
+        if (Back.first.y < centerOfBack.y + side_dimension / 2 && Back.first.y > centerOfBack.y - side_dimension / 2 &&
+            Back.first.x < centerOfBack.x + side_dimension / 2 && Back.first.x > centerOfBack.x - side_dimension / 2 &&
+            Back.first.z < centerOfBack.z + side_dimension / 2 && Back.first.z > centerOfBack.z - side_dimension / 2) {
+            intersections[numIntersections] = Back;
+            normals[numIntersections++] = normalOfBack;
+        }
+
 
         // find the closest intersection to the camera (smallest t)
         // sort the intersections
         for (int i = 0; i < numIntersections; i++) {
             for (int j = i + 1; j < numIntersections; j++) {
-                if (intersections[i].t > intersections[j].t) {
-                    CubeIntersect temp = intersections[i];
+                if (intersections[i].second > intersections[j].second) {
+                    vec3 temp2 = normals[i];
+                    normals[i] = normals[j];
+                    normals[j] = temp2;
+                    std::pair<vec3, float> temp = intersections[i];
                     intersections[i] = intersections[j];
                     intersections[j] = temp;
                 }
             }
         }
 
-        hit.t = intersections[0].t;
+        hit.t = intersections[1].second;
         hit.position = ray.start + ray.dir * hit.t;
-        hit.normal = intersections[0].normal;
-        hit.material = material;
+        hit.normal = normals[1] ;
+        //todo normal vectors are shit here i guess
         return hit;
     }
 
-    static CubeIntersect intersectionOfStraightLineAndPlane(vec3 start, vec3 dir, vec3 center, vec3 normal) {
+    static std::pair<vec3, float> intersectionOfStraightLineAndPlane(vec3 start, vec3 dir, vec3 center, vec3 normal) {
         float f = dot(center - start, normal) / dot(dir, normal);
         vec3 intersectionPoint = start + dir * f;
-        return CubeIntersect(intersectionPoint, f, normal);
+        return std::make_pair(intersectionPoint, f);
     }
 };
 
@@ -218,25 +212,24 @@ class Scene {
     vec3 La;
 public:
     void build() {
-        vec3 eye = vec3(0, 0, 2), vup = vec3(0, 1, 0), lookat = vec3(0, 0, 0);
+        vec3 eye = vec3(-0.7, 0.8, 0), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
         float fov = 45 * M_PI / 180;
         camera.set(eye, lookat, vup, fov);
 
-        La = vec3(0.4f, 0.4f, 0.4f);
-        vec3 lightDirection(1, 1, 1), Le(2, 2, 2);
-        lights.push_back(new Light(lightDirection, Le));
+        La = vec3(0.0f, 0.0f, 0.0f);
+        /*vec3 lightDirection(1, 1, 1), Le(1.5, 1.5, 1.5);
+        lights.push_back(new Light(lightDirection, Le));*/
 
         vec3 kd(0.3f, 0.2f, 0.1f), ks(2, 2, 2);
-        Material *material = new Material(kd, ks, 50);
-        for (int i = 0; i < 2; i++){
-            objects.push_back(new Sphere(vec3(rnd() - 0.5f, rnd() - 0.5f, rnd() - 0.5f), rnd() * 0.1f, material));
-            objects.push_back(new Cube(vec3(rnd() - 0.5f, rnd() - 0.5f, rnd() - 0.5f), rnd() * 0.3f, material));
+        for (int i = 0; i < 1; i++) {
+            objects.push_back(new Sphere(vec3(rnd() - 0.5f, rnd() - 0.5f, rnd() - 0.5f), rnd() * 0.1f));
+            objects.push_back(new Cube(vec3(0.0f, 0.0f, 0.0f), rnd() * 0.5f));
         }
     }
 
     void render(std::vector<vec4> &image) {
         for (int Y = 0; Y < windowHeight; Y++) {
-#pragma omp parallel for
+            #pragma omp parallel for
             for (int X = 0; X < windowWidth; X++) {
                 vec3 color = trace(camera.getRay(X, Y));
                 image[Y * windowWidth + X] = vec4(color.x, color.y, color.z, 1);
@@ -262,8 +255,11 @@ public:
     vec3 trace(Ray ray, int depth = 0) {
         Hit hit = firstIntersect(ray);
         if (hit.t < 0) return La;
-        vec3 outRadiance = hit.material->ka * La;
-        for (Light *light: lights) {
+        vec3 outRadiance = vec3(0.2f,0.2f,0.2f);
+        float specularAmbient = (0.2f * (1.0f + dot(hit.normal + vec3(0,0,0), ray.dir)));
+        vec3 temp = vec3(outRadiance.x + specularAmbient, outRadiance.y + specularAmbient, outRadiance.z + specularAmbient);
+        //fprintf(stderr, "Out: %f\n%f\n%f\n\n Lighted: %f\n%f\n%f\n\n", outRadiance.x, outRadiance.y, outRadiance.z,temp.x, temp.y, temp.z);
+        /*for (Light *light: lights) {
             Ray shadowRay(hit.position + hit.normal * epsilon, light->direction);
             float cosTheta = dot(hit.normal, light->direction);
             if (cosTheta > 0 && !shadowIntersect(shadowRay)) {    // shadow computation
@@ -273,8 +269,8 @@ public:
                 if (cosDelta > 0)
                     outRadiance = outRadiance + light->Le * hit.material->ks * powf(cosDelta, hit.material->shininess);
             }
-        }
-        return outRadiance;
+        }*/
+        return temp;
     }
 };
 
