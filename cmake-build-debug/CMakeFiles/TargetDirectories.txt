@@ -1,0 +1,3 @@
+/home/brosig/projects/grafika2clion/cmake-build-debug/CMakeFiles/Skeleton.dir
+/home/brosig/projects/grafika2clion/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/brosig/projects/grafika2clion/cmake-build-debug/CMakeFiles/rebuild_cache.dir
