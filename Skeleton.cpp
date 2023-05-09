@@ -6,6 +6,7 @@
 struct Hit {
     float t;
     vec3 position, normal;
+
     Hit() { t = -1; }
 };
 
@@ -51,125 +52,332 @@ struct Sphere : public Intersectable {
     }
 };
 
-struct Cube : public Intersectable {
-    vec3 center;
-    float side_dimension; // length of the side of the cube
+// Triangle intersection based on 12. page of the ray-tracing pdf.
+struct Triangle : public Intersectable {
+    vec3 r1, r2, r3;
+    vec3 n;
 
-
-    Cube(const vec3 &_center, float _side_dimension) {
-        center = _center;
-        side_dimension = _side_dimension;
+    Triangle(const vec3 &_r1, const vec3 &_r2, const vec3 &_r3) {
+        r1 = _r1;
+        r2 = _r2;
+        r3 = _r3;
+        n = normalize(cross(r2 - r1, r3 - r1));
     }
 
-    // should result negative t parameter if no intersect is found
+    Triangle(const vec3 &_r1, const vec3 &_r2, const vec3 &_r3, const vec3 &_n) {
+        r1 = _r1;
+        r2 = _r2;
+        r3 = _r3;
+        n = _n;
+    }
+
     Hit intersect(const Ray &ray) {
         Hit hit;
-        std::pair<vec3, float> intersections[6];
-        vec3 normals[6];
-        int numIntersections = 0;
-        vec3 centerOfTop = center + vec3(0, side_dimension / 2, 0);
-        vec3 normalOfTop = vec3(0, 1, 0);
-        std::pair<vec3, float> Top = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfTop, normalOfTop);
-        if (Top.first.y < centerOfTop.y + side_dimension / 2 && Top.first.y > centerOfTop.y - side_dimension / 2 &&
-            Top.first.x < centerOfTop.x + side_dimension / 2 && Top.first.x > centerOfTop.x - side_dimension / 2 &&
-            Top.first.z < centerOfTop.z + side_dimension / 2 && Top.first.z > centerOfTop.z - side_dimension / 2) {
-            intersections[numIntersections] = Top;
-            normals[numIntersections++] = normalOfTop;
+        float t = dot(r1 - ray.start, n) / dot(ray.dir, n);
+        if (t <= 0) return hit;
+        vec3 p = ray.start + ray.dir * t;
+        if (dot(cross(r2 - r1, p - r1), n) > 0 &&
+            dot(cross(r3 - r2, p - r2), n) > 0 &&
+            dot(cross(r1 - r3, p - r3), n) > 0) {
+            hit.t = t;
+            hit.position = p;
+            hit.normal = n;
         }
-
-        vec3 centerOfBottom = center - vec3(0, side_dimension / 2, 0);
-        vec3 normalOfBottom = vec3(0, -1, 0);
-        std::pair<vec3, float> Bottom = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfBottom,
-                                                                           normalOfBottom);
-        if (Bottom.first.y < centerOfBottom.y + side_dimension / 2 &&
-            Bottom.first.y > centerOfBottom.y - side_dimension / 2 &&
-            Bottom.first.x < centerOfBottom.x + side_dimension / 2 &&
-            Bottom.first.x > centerOfBottom.x - side_dimension / 2 &&
-            Bottom.first.z < centerOfBottom.z + side_dimension / 2 &&
-            Bottom.first.z > centerOfBottom.z - side_dimension / 2) {
-            intersections[numIntersections] = Bottom;
-            normals[numIntersections++] = normalOfBottom;
-        }
-
-        vec3 centerOfLeft = center - vec3(side_dimension / 2, 0, 0);
-        vec3 normalOfLeft = vec3(-1, 0, 0);
-        std::pair<vec3, float> Left = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfLeft,
-                                                                         normalOfLeft);
-        if (Left.first.y < centerOfLeft.y + side_dimension / 2 && Left.first.y > centerOfLeft.y - side_dimension / 2 &&
-            Left.first.x < centerOfLeft.x + side_dimension / 2 && Left.first.x > centerOfLeft.x - side_dimension / 2 &&
-            Left.first.z < centerOfLeft.z + side_dimension / 2 && Left.first.z > centerOfLeft.z - side_dimension / 2) {
-            intersections[numIntersections] = Left;
-            normals[numIntersections++] = normalOfLeft;
-        }
-
-        vec3 centerOfRight = center + vec3(side_dimension / 2, 0, 0);
-        vec3 normalOfRight = vec3(1, 0, 0);
-        std::pair<vec3, float> Right = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfRight,
-                                                                          normalOfRight);
-        if (Right.first.y < centerOfRight.y + side_dimension / 2 &&
-            Right.first.y > centerOfRight.y - side_dimension / 2 &&
-            Right.first.x < centerOfRight.x + side_dimension / 2 &&
-            Right.first.x > centerOfRight.x - side_dimension / 2 &&
-            Right.first.z < centerOfRight.z + side_dimension / 2 &&
-            Right.first.z > centerOfRight.z - side_dimension / 2) {
-            intersections[numIntersections] = Right;
-            normals[numIntersections++] = normalOfRight;
-        }
-
-        vec3 centerOfFront = center + vec3(0, 0, side_dimension / 2);
-        vec3 normalOfFront = vec3(0, 0, 1);
-        std::pair<vec3, float> Front = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfFront,
-                                                                          normalOfFront);
-        if (Front.first.y < centerOfFront.y + side_dimension / 2 &&
-            Front.first.y > centerOfFront.y - side_dimension / 2 &&
-            Front.first.x < centerOfFront.x + side_dimension / 2 &&
-            Front.first.x > centerOfFront.x - side_dimension / 2 &&
-            Front.first.z < centerOfFront.z + side_dimension / 2 &&
-            Front.first.z > centerOfFront.z - side_dimension / 2) {
-            intersections[numIntersections] = Front;
-            normals[numIntersections++] = normalOfFront;
-        }
-
-        vec3 centerOfBack = center - vec3(0, 0, side_dimension / 2);
-        vec3 normalOfBack = vec3(0, 0, -1);
-        std::pair<vec3, float> Back = intersectionOfStraightLineAndPlane(ray.start, ray.dir, centerOfBack,
-                                                                         normalOfBack);
-        if (Back.first.y < centerOfBack.y + side_dimension / 2 && Back.first.y > centerOfBack.y - side_dimension / 2 &&
-            Back.first.x < centerOfBack.x + side_dimension / 2 && Back.first.x > centerOfBack.x - side_dimension / 2 &&
-            Back.first.z < centerOfBack.z + side_dimension / 2 && Back.first.z > centerOfBack.z - side_dimension / 2) {
-            intersections[numIntersections] = Back;
-            normals[numIntersections++] = normalOfBack;
-        }
-
-
-        // find the closest intersection to the camera (smallest t)
-        // sort the intersections
-        for (int i = 0; i < numIntersections; i++) {
-            for (int j = i + 1; j < numIntersections; j++) {
-                if (intersections[i].second > intersections[j].second) {
-                    vec3 temp2 = normals[i];
-                    normals[i] = normals[j];
-                    normals[j] = temp2;
-                    std::pair<vec3, float> temp = intersections[i];
-                    intersections[i] = intersections[j];
-                    intersections[j] = temp;
-                }
-            }
-        }
-
-        hit.t = intersections[1].second;
-        hit.position = ray.start + ray.dir * hit.t;
-        hit.normal = normals[1] ;
-        //todo normal vectors are shit here i guess
         return hit;
     }
+};
 
-    static std::pair<vec3, float> intersectionOfStraightLineAndPlane(vec3 start, vec3 dir, vec3 center, vec3 normal) {
-        float f = dot(center - start, normal) / dot(dir, normal);
-        vec3 intersectionPoint = start + dir * f;
-        return std::make_pair(intersectionPoint, f);
+struct Cube : public Intersectable {
+    std::vector<Triangle> triangles;
+    vec3 center;
+    float side_length;
+
+    Cube(const vec3 &center, const float &side_length)
+            : center(center), side_length(side_length) {
+        std::vector<vec3> vertices = {
+                vec3(-0.5f, -0.5f, -0.5f),
+                vec3(-0.5f, -0.5f, 0.5f),
+                vec3(-0.5f, 0.5f, -0.5f),
+                vec3(-0.5f, 0.5f, 0.5f),
+                vec3(0.5f, -0.5f, -0.5f),
+                vec3(0.5f, -0.5f, 0.5f),
+                vec3(0.5f, 0.5f, -0.5f),
+                vec3(0.5f, 0.5f, 0.5f)
+        };
+
+        std::vector<std::vector<int>> faces = {
+                // the first 3 numbers are the indices of the vertices of the triangle, the last is the normal vectors.
+                {1, 7, 5, 2},
+                {1, 3, 7, 2},
+                {1, 4, 3, 6},
+                {1, 2, 4, 6},
+                {3, 8, 7, 3},
+                {3, 4, 8, 3},
+                {5, 7, 8, 5},
+                {5, 8, 6, 5},
+                {1, 5, 6, 4},
+                {1, 6, 2, 4},
+                {2, 6, 8, 1},
+                {2, 8, 4, 1}
+        };
+
+        std::vector<vec3> normals = {
+                vec3(0.0f, 0.0f, 1.0f),
+                vec3(0.0f, 0.0f, -1.0f),
+                vec3(0.0f, 1.0f, 0.0f),
+                vec3(0.0f, -1.0f, 0.0f),
+                vec3(1.0f, 0.0f, 0.0f),
+                vec3(-1.0f, 0.0f, 0.0f)
+        };
+
+        for (int i = 0; i < faces.size(); i++) {
+            triangles.push_back(Triangle(vertices[faces[i][0] - 1] * side_length + center,
+                                         vertices[faces[i][1] - 1] * side_length + center,
+                                         vertices[faces[i][2] - 1] * side_length + center,
+                                         normals[faces[i][3] - 1]));
+        }
+    }
+
+    Hit intersect(const Ray &ray) {
+        std::vector<Hit> hits;
+        for (int i = 0; i < triangles.size(); i++) {
+            Hit hit = triangles[i].intersect(ray);
+            if (hit.t > 0) {
+                hits.push_back(hit);
+            }
+        }
+        if (hits.size() > 0) {
+            if (hits[0].t < hits[1].t) {
+                return hits[1];
+            } else {
+                return hits[0];
+            }
+        } else {
+            return Hit();
+        }
     }
 };
+
+struct IcosaHedron : public Intersectable {
+    vec3 center;
+    float scaling;
+    std::vector<Triangle> triangles;
+
+    IcosaHedron(const vec3 &center, const float &scaling) : center(center), scaling(scaling) {
+        std::vector<vec3> verticles = {
+                vec3(0, -0.525731, 0.850651),
+                vec3(0.850651, 0, 0.525731),
+                vec3(0.850651, 0, -0.525731),
+                vec3(-0.850651, 0, -0.525731),
+                vec3(-0.850651, 0, 0.525731),
+                vec3(-0.525731, 0.850651, 0),
+                vec3(0.525731, 0.850651, 0),
+                vec3(0.525731, -0.850651, 0),
+                vec3(-0.525731, -0.850651, 0),
+                vec3(0, -0.525731, -0.850651),
+                vec3(0, 0.525731, -0.850651),
+                vec3(0, 0.525731, 0.850651)
+        };
+        std::vector<std::vector<int>> faces = {
+                {2,  3,  7},
+                {2,  8,  3},
+                {4,  5,  6},
+                {5,  4,  9},
+                {7,  6,  12},
+                {6,  7,  11},
+                {10, 11, 3},
+                {11, 10, 4},
+                {8,  9,  10},
+                {9,  8,  1},
+                {12, 1,  2},
+                {1,  12, 5},
+                {7,  3,  11},
+                {2,  7,  12},
+                {4,  6,  11},
+                {6,  5,  12},
+                {3,  8,  10},
+                {8,  2,  1},
+                {4,  10, 9},
+                {5,  9,  1}
+        };
+
+        for (int i = 0; i < faces.size(); i++) {
+            triangles.push_back(Triangle(verticles[faces[i][0] - 1] * scaling + center,
+                                         verticles[faces[i][1] - 1] * scaling + center,
+                                         verticles[faces[i][2] - 1] * scaling + center));
+        }
+    }
+
+    Hit intersect(const Ray &ray) {
+        std::vector<Hit> hits;
+        for (int i = 0; i < triangles.size(); i++) {
+            Hit hit = triangles[i].intersect(ray);
+            if (hit.t > 0) {
+                hits.push_back(hit);
+            }
+        }
+        if (hits.size() > 0) {
+            if (hits[0].t > hits[1].t) {
+                return hits[1];
+            } else {
+                return hits[0];
+            }
+        } else {
+            return Hit();
+        }
+    }
+
+};
+
+/*v  -0.57735  -0.57735  0.57735
+v  0.934172  0.356822  0
+v  0.934172  -0.356822  0
+v  -0.934172  0.356822  0
+v  -0.934172  -0.356822  0
+v  0  0.934172  0.356822
+v  0  0.934172  -0.356822
+v  0.356822  0  -0.934172
+v  -0.356822  0  -0.934172
+v  0  -0.934172  -0.356822
+v  0  -0.934172  0.356822
+v  0.356822  0  0.934172
+v  -0.356822  0  0.934172
+v  0.57735  0.57735  -0.57735
+v  0.57735  0.57735  0.57735
+v  -0.57735  0.57735  -0.57735
+v  -0.57735  0.57735  0.57735
+v  0.57735  -0.57735  -0.57735
+v  0.57735  -0.57735  0.57735
+v  -0.57735  -0.57735  -0.57735
+
+f  19  3  2
+f  12  19  2
+f  15  12  2
+f  8  14  2
+f  18  8  2
+f  3  18  2
+f  20  5  4
+f  9  20  4
+f  16  9  4
+f  13  17  4
+f  1  13  4
+f  5  1  4
+f  7  16  4
+f  6  7  4
+f  17  6  4
+f  6  15  2
+f  7  6  2
+f  14  7  2
+f  10  18  3
+f  11  10  3
+f  19  11  3
+f  11  1  5
+f  10  11  5
+f  20  10  5
+f  20  9  8
+f  10  20  8
+f  18  10  8
+f  9  16  7
+f  8  9  7
+f  14  8  7
+f  12  15  6
+f  13  12  6
+f  17  13  6
+f  13  1  11
+f  12  13  11
+f  19  12  11*/
+
+struct DodecaHedron : public Intersectable {
+    std::vector<Triangle> triangles;
+
+    DodecaHedron(vec3 center, float scaling) {
+        std::vector<vec3> verticles = {
+                vec3(-0.57735, -0.57735, 0.57735),
+                vec3(0.934172, 0.356822, 0),
+                vec3(0.934172, -0.356822, 0),
+                vec3(-0.934172, 0.356822, 0),
+                vec3(-0.934172, -0.356822, 0),
+                vec3(0, 0.934172, 0.356822),
+                vec3(0, 0.934172, -0.356822),
+                vec3(0.356822, 0, -0.934172),
+                vec3(-0.356822, 0, -0.934172),
+                vec3(0, -0.934172, -0.356822),
+                vec3(0, -0.934172, 0.356822),
+                vec3(0.356822, 0, 0.934172),
+                vec3(-0.356822, 0, 0.934172),
+                vec3(0.57735, 0.57735, -0.57735),
+                vec3(0.57735, 0.57735, 0.57735),
+                vec3(-0.57735, 0.57735, -0.57735),
+                vec3(-0.57735, 0.57735, 0.57735),
+                vec3(0.57735, -0.57735, -0.57735),
+                vec3(0.57735, -0.57735, 0.57735),
+                vec3(-0.57735, -0.57735, -0.57735)
+        };
+        std::vector<std::vector<int>> faces = {
+                {19, 3,  2},
+                {12, 19, 2},
+                {15, 12, 2},
+                {8,  14, 2},
+                {18, 8,  2},
+                {3,  18, 2},
+                {20, 5,  4},
+                {9,  20, 4},
+                {16, 9,  4},
+                {13, 17, 4},
+                {1,  13, 4},
+                {5,  1,  4},
+                {7,  16, 4},
+                {6,  7,  4},
+                {17, 6,  4},
+                {6,  15, 2},
+                {7,  6,  2},
+                {14, 7,  2},
+                {10, 18, 3},
+                {11, 10, 3},
+                {19, 11, 3},
+                {11, 1,  5},
+                {10, 11, 5},
+                {20, 10, 5},
+                {20, 9,  8},
+                {10, 20, 8},
+                {18, 10, 8},
+                {9,  16, 7},
+                {8,  9,  7},
+                {14, 8,  7},
+                {12, 15, 6},
+                {13, 12, 6},
+                {17, 13, 6},
+                {13, 1,  11},
+                {12, 13, 11},
+                {19, 12, 11}};
+
+        for (int i = 0; i < faces.size(); i++) {
+            triangles.push_back(Triangle(verticles[faces[i][0] - 1] * scaling + center,
+                                         verticles[faces[i][1] - 1] * scaling + center,
+                                         verticles[faces[i][2] - 1] * scaling + center));
+        }
+    }
+
+    Hit intersect(const Ray &ray) {
+        std::vector<Hit> hits;
+        for (int i = 0; i < triangles.size(); i++) {
+            Hit hit = triangles[i].intersect(ray);
+            if (hit.t > 0) {
+                hits.push_back(hit);
+            }
+        }
+        if (hits.size() > 0) {
+            if (hits[0].t > hits[1].t) {
+                return hits[1];
+            } else {
+                return hits[0];
+            }
+        } else {
+            return Hit();
+        }
+    }
+};
+
 
 class Camera {
     vec3 eye, lookat, right, up;
@@ -212,7 +420,7 @@ class Scene {
     vec3 La;
 public:
     void build() {
-        vec3 eye = vec3(-0.7, 0.8, 0), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
+        vec3 eye = vec3(1.3f, 1.6f, 0.0f), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
         float fov = 45 * M_PI / 180;
         camera.set(eye, lookat, vup, fov);
 
@@ -222,14 +430,18 @@ public:
 
         vec3 kd(0.3f, 0.2f, 0.1f), ks(2, 2, 2);
         for (int i = 0; i < 1; i++) {
-            objects.push_back(new Sphere(vec3(rnd() - 0.5f, rnd() - 0.5f, rnd() - 0.5f), rnd() * 0.1f));
-            objects.push_back(new Cube(vec3(0.0f, 0.0f, 0.0f), rnd() * 0.5f));
+            //objects.push_back(new Sphere(vec3(rnd() - 0.5f, rnd() - 0.5f, rnd() - 0.5f), rnd() * 0.1f));
+            objects.push_back(new Cube(vec3(0.0f, 0.0f, 0.0f), 1));
+            objects.push_back(new IcosaHedron(vec3(0.3f, 0.0f, -0.2f), 0.3f));
+            objects.push_back(new DodecaHedron(vec3(-0.4f, 0.1f, -0.25f), 0.3f));
+            //objects.push_back(new Cube(vec3(0.0f, 0.0f, 0.0f), 0.4));
+            //objects.push_back(new Triangle(vec3(1.0f, 0.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(2.0f, 2.0f, 0.0f)));
         }
     }
 
     void render(std::vector<vec4> &image) {
         for (int Y = 0; Y < windowHeight; Y++) {
-            #pragma omp parallel for
+#pragma omp parallel for
             for (int X = 0; X < windowWidth; X++) {
                 vec3 color = trace(camera.getRay(X, Y));
                 image[Y * windowWidth + X] = vec4(color.x, color.y, color.z, 1);
@@ -255,9 +467,8 @@ public:
     vec3 trace(Ray ray, int depth = 0) {
         Hit hit = firstIntersect(ray);
         if (hit.t < 0) return La;
-        vec3 outRadiance = vec3(0.2f,0.2f,0.2f);
-        float specularAmbient = (0.2f * (1.0f + dot(hit.normal + vec3(0,0,0), ray.dir)));
-        vec3 temp = vec3(outRadiance.x + specularAmbient, outRadiance.y + specularAmbient, outRadiance.z + specularAmbient);
+        float specularAmbient = (0.2f * (1.0f + dot(hit.normal, ray.dir * (-1.0f))));
+        vec3 temp = vec3(specularAmbient, specularAmbient, specularAmbient);
         //fprintf(stderr, "Out: %f\n%f\n%f\n\n Lighted: %f\n%f\n%f\n\n", outRadiance.x, outRadiance.y, outRadiance.z,temp.x, temp.y, temp.z);
         /*for (Light *light: lights) {
             Ray shadowRay(hit.position + hit.normal * epsilon, light->direction);
