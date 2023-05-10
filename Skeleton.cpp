@@ -229,64 +229,6 @@ struct IcosaHedron : public Intersectable {
 
 };
 
-/*v  -0.57735  -0.57735  0.57735
-v  0.934172  0.356822  0
-v  0.934172  -0.356822  0
-v  -0.934172  0.356822  0
-v  -0.934172  -0.356822  0
-v  0  0.934172  0.356822
-v  0  0.934172  -0.356822
-v  0.356822  0  -0.934172
-v  -0.356822  0  -0.934172
-v  0  -0.934172  -0.356822
-v  0  -0.934172  0.356822
-v  0.356822  0  0.934172
-v  -0.356822  0  0.934172
-v  0.57735  0.57735  -0.57735
-v  0.57735  0.57735  0.57735
-v  -0.57735  0.57735  -0.57735
-v  -0.57735  0.57735  0.57735
-v  0.57735  -0.57735  -0.57735
-v  0.57735  -0.57735  0.57735
-v  -0.57735  -0.57735  -0.57735
-
-f  19  3  2
-f  12  19  2
-f  15  12  2
-f  8  14  2
-f  18  8  2
-f  3  18  2
-f  20  5  4
-f  9  20  4
-f  16  9  4
-f  13  17  4
-f  1  13  4
-f  5  1  4
-f  7  16  4
-f  6  7  4
-f  17  6  4
-f  6  15  2
-f  7  6  2
-f  14  7  2
-f  10  18  3
-f  11  10  3
-f  19  11  3
-f  11  1  5
-f  10  11  5
-f  20  10  5
-f  20  9  8
-f  10  20  8
-f  18  10  8
-f  9  16  7
-f  8  9  7
-f  14  8  7
-f  12  15  6
-f  13  12  6
-f  17  13  6
-f  13  1  11
-f  12  13  11
-f  19  12  11*/
-
 struct DodecaHedron : public Intersectable {
     std::vector<Triangle> triangles;
 
@@ -378,6 +320,82 @@ struct DodecaHedron : public Intersectable {
     }
 };
 
+struct Cone : Intersectable {
+    vec3 p; // tip of the cone
+    vec3 n; // unit vector in direction of increasing radius;
+    float alfa; // angle between the axis and the surface
+    float h; // height of the cone
+
+    Cone(vec3 p, vec3 n, float alfa, float h) : p(p), n(n), alfa(alfa), h(h) {}
+
+
+    Hit intersect(const Ray &ray) {
+        Hit hit;
+        vec3 s = ray.start;
+        vec3 d = ray.dir;
+        float a = dot(d, n) * dot(d, n) - dot(d, d) * cosf(alfa) * cosf(alfa);
+        float b = 2 * dot(d, n) * dot(s - p, n) - 2 * dot(d, s - p) * cosf(alfa) * cosf(alfa);
+        float c = dot(s - p, n) * dot(s - p, n) - dot(s - p, s - p) * cosf(alfa) * cosf(alfa);
+        float D = b * b - 4 * a * c;
+        float sqrt_discr = sqrtf(D);
+        float t1 = (-b + sqrt_discr) / 2.0f / a;    // t1 >= t2 for sure
+        float t2 = (-b - sqrt_discr) / 2.0f / a;
+        /*hit.t = t2 > 0 ? t2 : t1;
+        hit.position = ray.start + ray.dir * hit.t;
+        if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
+            hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
+            return hit;
+        } else {
+            hit.t = t1;
+            hit.position = ray.start + ray.dir * hit.t;
+            if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
+                hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n)) * -1.0f;
+                return hit;
+            } else {
+                return Hit();
+            }
+        }*/
+        if(t1 < t2){
+            hit.t = t1;
+            hit.position = ray.start + ray.dir * hit.t;
+            if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot((hit.position-p) / length(hit.position-p),n) <= cosf(alfa) + 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
+                hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
+                return hit;
+            } else {
+                hit.t = t2;
+                hit.position = ray.start + ray.dir * hit.t;
+                if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot((hit.position-p) / length(hit.position-p),n) <= cosf(alfa) + 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
+                    hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
+                    return hit;
+                } else {
+                    return Hit();
+                }
+            }
+        }else if(t2 < t1){
+            hit.t = t2;
+            hit.position = ray.start + ray.dir * hit.t;
+            if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot((hit.position-p) / length(hit.position-p),n) <= cosf(alfa) + 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
+                hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
+                return hit;
+            } else {
+                hit.t = t2;
+                hit.position = ray.start + ray.dir * hit.t;
+                if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot((hit.position-p) / length(hit.position-p),n) <= cosf(alfa) + 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
+                    hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
+                    return hit;
+                } else {
+                    return Hit();
+                }
+            }
+        } else{
+            return Hit();
+        }
+
+
+    }
+
+
+};
 
 class Camera {
     vec3 eye, lookat, right, up;
@@ -415,12 +433,13 @@ const float epsilon = 0.0001f;
 
 class Scene {
     std::vector<Intersectable *> objects;
+    std::vector<Cone *> cones;
     std::vector<Light *> lights;
     Camera camera;
     vec3 La;
 public:
     void build() {
-        vec3 eye = vec3(1.3f, 1.6f, 0.0f), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
+        vec3 eye = vec3(1.0f, 1.5f, 0.0f), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
         float fov = 45 * M_PI / 180;
         camera.set(eye, lookat, vup, fov);
 
@@ -434,9 +453,34 @@ public:
             objects.push_back(new Cube(vec3(0.0f, 0.0f, 0.0f), 1));
             objects.push_back(new IcosaHedron(vec3(0.3f, 0.0f, -0.2f), 0.3f));
             objects.push_back(new DodecaHedron(vec3(-0.4f, 0.1f, -0.25f), 0.3f));
+            Cone *cone = new Cone(vec3(-0.500000f,0.022291f, 0.083970f), vec3(0.0f, -1.0f, 0.0f), 0.5f, 0.5f);
+            Cone *cone2 = new Cone(vec3(0.0f, 0.0f, 0.0f), vec3(1.0f, 0.0f, 0.0f), 0.3f, 0.1f);
+            Cone *cone3 = new Cone(vec3(-0.5f, 0.0f, 0.0f), vec3(0.0f, -1.0f, 0.0f), 0.3f, 0.8f);
+            cones.push_back(cone);
+            cones.push_back(cone2);
+            cones.push_back(cone3);
+            objects.push_back(cone);
+            objects.push_back(cone2);
+            objects.push_back(cone3);
             //objects.push_back(new Cube(vec3(0.0f, 0.0f, 0.0f), 0.4));
             //objects.push_back(new Triangle(vec3(1.0f, 0.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(2.0f, 2.0f, 0.0f)));
         }
+    }
+
+    void refresh(int pX, int pY) {
+        Hit hit = firstIntersect(camera.getRay(pX, 600 - pY));
+        float shortestDistance = 1000.0f;
+        Cone *closestCone;
+        for (auto &cone: cones) {
+            float currentLength = abs(length(hit.position - cone->p));
+            if (currentLength < shortestDistance) {
+                shortestDistance = currentLength;
+                closestCone = cone;
+            }
+        }
+        closestCone->p = hit.position;
+        fprintf(stderr, "X: %f, Y: %f, Z: %f\n", hit.position.x, hit.position.y, hit.position.z);
+        closestCone->n = hit.normal;
     }
 
     void render(std::vector<vec4> &image) {
@@ -581,6 +625,18 @@ void onKeyboardUp(unsigned char key, int pX, int pY) {
 
 // Mouse click event
 void onMouse(int button, int state, int pX, int pY) {
+    if (state == GLUT_DOWN) {
+        if (button == GLUT_LEFT_BUTTON) {
+            scene.refresh(pX, pY);
+
+            std::vector<vec4> image(windowWidth * windowHeight);
+            scene.render(image);
+            delete fullScreenTexturedQuad;
+            fullScreenTexturedQuad = new FullScreenTexturedQuad(windowWidth, windowHeight, image);
+            fullScreenTexturedQuad->Draw();
+            glutSwapBuffers();
+        }
+    }
 }
 
 // Move mouse with key pressed
