@@ -24,34 +24,6 @@ public:
     virtual Hit intersect(const Ray &ray) = 0;
 };
 
-struct Sphere : public Intersectable {
-    vec3 center;
-    float radius;
-
-    Sphere(const vec3 &_center, float _radius) {
-        center = _center;
-        radius = _radius;
-    }
-
-    Hit intersect(const Ray &ray) {
-        Hit hit;
-        vec3 dist = ray.start - center;
-        float a = dot(ray.dir, ray.dir);
-        float b = dot(dist, ray.dir) * 2.0f;
-        float c = dot(dist, dist) - radius * radius;
-        float discr = b * b - 4.0f * a * c;
-        if (discr < 0) return hit;
-        float sqrt_discr = sqrtf(discr);
-        float t1 = (-b + sqrt_discr) / 2.0f / a;    // t1 >= t2 for sure
-        float t2 = (-b - sqrt_discr) / 2.0f / a;
-        if (t1 <= 0) return hit;
-        hit.t = (t2 > 0) ? t2 : t1;
-        hit.position = ray.start + ray.dir * hit.t;
-        hit.normal = (hit.position - center) * (1.0f / radius);
-        return hit;
-    }
-};
-
 // Triangle intersection based on 12. page of the ray-tracing pdf.
 struct Triangle : public Intersectable {
     vec3 r1, r2, r3;
@@ -130,23 +102,23 @@ struct Cube : public Intersectable {
                 vec3(-1.0f, 0.0f, 0.0f)
         };
 
-        for (int i = 0; i < faces.size(); i++) {
-            triangles.push_back(Triangle(vertices[faces[i][0] - 1] * side_length + center,
-                                         vertices[faces[i][1] - 1] * side_length + center,
-                                         vertices[faces[i][2] - 1] * side_length + center,
-                                         normals[faces[i][3] - 1]));
+        for (auto & face : faces) {
+            triangles.emplace_back(vertices[face[0] - 1] * side_length + center,
+                                         vertices[face[1] - 1] * side_length + center,
+                                         vertices[face[2] - 1] * side_length + center,
+                                         normals[face[3] - 1]);
         }
     }
 
-    Hit intersect(const Ray &ray) {
+    Hit intersect(const Ray &ray) override {
         std::vector<Hit> hits;
-        for (int i = 0; i < triangles.size(); i++) {
-            Hit hit = triangles[i].intersect(ray);
+        for (auto & triangle : triangles) {
+            Hit hit = triangle.intersect(ray);
             if (hit.t > 0) {
                 hits.push_back(hit);
             }
         }
-        if (hits.size() > 0) {
+        if (!hits.empty()) {
             if (hits[0].t < hits[1].t) {
                 return hits[1];
             } else {
@@ -201,32 +173,39 @@ struct IcosaHedron : public Intersectable {
                 {5,  9,  1}
         };
 
-        for (int i = 0; i < faces.size(); i++) {
-            triangles.push_back(Triangle(verticles[faces[i][0] - 1] * scaling + center,
-                                         verticles[faces[i][1] - 1] * scaling + center,
-                                         verticles[faces[i][2] - 1] * scaling + center));
+        for (auto & face : faces) {
+            triangles.emplace_back(verticles[face[0] - 1] * scaling + center,
+                                         verticles[face[1] - 1] * scaling + center,
+                                         verticles[face[2] - 1] * scaling + center);
         }
     }
 
     Hit intersect(const Ray &ray) {
         std::vector<Hit> hits;
-        for (int i = 0; i < triangles.size(); i++) {
-            Hit hit = triangles[i].intersect(ray);
+        for (auto & triangle : triangles) {
+            Hit hit = triangle.intersect(ray);
             if (hit.t > 0) {
                 hits.push_back(hit);
             }
         }
-        if (hits.size() > 0) {
+        if (!hits.empty()) {
             if (hits[0].t > hits[1].t) {
                 return hits[1];
             } else {
                 return hits[0];
             }
         } else {
-            return Hit();
+            return {};
         }
     }
 
+};
+
+struct Light {
+    vec3 position;
+    vec3 Le;
+
+    Light(vec3 position, vec3 Le) : position(position), Le(Le) {}
 };
 
 struct DodecaHedron : public Intersectable {
@@ -293,43 +272,45 @@ struct DodecaHedron : public Intersectable {
                 {12, 13, 11},
                 {19, 12, 11}};
 
-        for (int i = 0; i < faces.size(); i++) {
-            triangles.push_back(Triangle(verticles[faces[i][0] - 1] * scaling + center,
-                                         verticles[faces[i][1] - 1] * scaling + center,
-                                         verticles[faces[i][2] - 1] * scaling + center));
+        for (auto & face : faces) {
+            triangles.emplace_back(verticles[face[0] - 1] * scaling + center,
+                                         verticles[face[1] - 1] * scaling + center,
+                                         verticles[face[2] - 1] * scaling + center);
         }
     }
 
     Hit intersect(const Ray &ray) {
         std::vector<Hit> hits;
-        for (int i = 0; i < triangles.size(); i++) {
-            Hit hit = triangles[i].intersect(ray);
+        for (auto & triangle : triangles) {
+            Hit hit = triangle.intersect(ray);
             if (hit.t > 0) {
                 hits.push_back(hit);
             }
         }
-        if (hits.size() > 0) {
+        if (!hits.empty()) {
             if (hits[0].t > hits[1].t) {
                 return hits[1];
             } else {
                 return hits[0];
             }
         } else {
-            return Hit();
+            return {};
         }
     }
 };
 
+const float epsilon = 0.0001f;
+
 struct Cone : Intersectable {
+    Light *light;
     vec3 p; // tip of the cone
     vec3 n; // unit vector in direction of increasing radius;
     float alfa; // angle between the axis and the surface
     float h; // height of the cone
 
-    Cone(vec3 p, vec3 n, float alfa, float h) : p(p), n(n), alfa(alfa), h(h) {}
+    Cone(vec3 p, vec3 n, float alfa, float h, Light *light) : light(light), p(p), n(n), alfa(alfa), h(h) {}
 
-
-    Hit intersect(const Ray &ray) {
+    Hit intersect(const Ray& ray) {
         Hit hit;
         vec3 s = ray.start;
         vec3 d = ray.dir;
@@ -338,60 +319,52 @@ struct Cone : Intersectable {
         float c = dot(s - p, n) * dot(s - p, n) - dot(s - p, s - p) * cosf(alfa) * cosf(alfa);
         float D = b * b - 4 * a * c;
         float sqrt_discr = sqrtf(D);
-        float t1 = (-b + sqrt_discr) / 2.0f / a;    // t1 >= t2 for sure
-        float t2 = (-b - sqrt_discr) / 2.0f / a;
-        /*hit.t = t2 > 0 ? t2 : t1;
-        hit.position = ray.start + ray.dir * hit.t;
-        if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
-            hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
-            return hit;
-        } else {
+        float t1 = (-b + sqrt_discr) / (2.0f * a);
+        float t2 = (-b - sqrt_discr) / (2.0f * a);
+
+        bool t1Valid = false;
+        bool t2Valid = false;
+
+        if (t1 < t2) {
             hit.t = t1;
             hit.position = ray.start + ray.dir * hit.t;
-            if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
-                hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n)) * -1.0f;
-                return hit;
-            } else {
-                return Hit();
-            }
-        }*/
-        if(t1 < t2){
-            hit.t = t1;
-            hit.position = ray.start + ray.dir * hit.t;
-            if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot((hit.position-p) / length(hit.position-p),n) <= cosf(alfa) + 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
-                hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
-                return hit;
-            } else {
+            t1Valid = checkIntersection(hit, p, n, alfa, h);
+
+            if (!t1Valid) {
                 hit.t = t2;
                 hit.position = ray.start + ray.dir * hit.t;
-                if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot((hit.position-p) / length(hit.position-p),n) <= cosf(alfa) + 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
-                    hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
-                    return hit;
-                } else {
-                    return Hit();
-                }
+                t2Valid = checkIntersection(hit, p, n, alfa, h);
             }
-        }else if(t2 < t1){
+        } else if (t2 < t1) {
             hit.t = t2;
             hit.position = ray.start + ray.dir * hit.t;
-            if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot((hit.position-p) / length(hit.position-p),n) <= cosf(alfa) + 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
-                hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
-                return hit;
-            } else {
-                hit.t = t2;
+            t2Valid = checkIntersection(hit, p, n, alfa, h);
+
+            if (!t2Valid) {
+                hit.t = t1;
                 hit.position = ray.start + ray.dir * hit.t;
-                if(dot((hit.position-p) / length(hit.position-p),n) >= cosf(alfa) - 0.01f && dot((hit.position-p) / length(hit.position-p),n) <= cosf(alfa) + 0.01f && dot(hit.position-p,n) >= 0.0f && dot(hit.position-p,n) <= h){
-                    hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
-                    return hit;
-                } else {
-                    return Hit();
-                }
+                t1Valid = checkIntersection(hit, p, n, alfa, h);
             }
-        } else{
-            return Hit();
         }
 
+        if (t1Valid || t2Valid) {
+            hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
+            if (t2Valid) {
+                hit.normal = hit.normal * -1.0f;
+            }
+            return hit;
+        } else {
+            return {};
+        }
+    }
 
+    bool checkIntersection(const Hit& hit, const vec3& p, const vec3& n, float alfa, float h) {
+        vec3 positionDiff = hit.position - p;
+        float positionLength = length(positionDiff);
+        float dotProduct = dot(positionDiff / positionLength, n);
+
+        return (dotProduct >= cosf(alfa) - epsilon * 40.0f && dotProduct <= cosf(alfa) + epsilon * 40.0f &&
+                dot(hit.position - p, n) >= 0.0f && dot(hit.position - p, n) <= h);
     }
 
 
@@ -413,28 +386,16 @@ public:
         vec3 dir =
                 lookat + right * (2.0f * (X + 0.5f) / windowWidth - 1) + up * (2.0f * (Y + 0.5f) / windowHeight - 1) -
                 eye;
-        return Ray(eye, dir);
-    }
-};
-
-struct Light {
-    vec3 direction;
-    vec3 Le;
-
-    Light(vec3 _direction, vec3 _Le) {
-        direction = normalize(_direction);
-        Le = _Le;
+        return {eye, dir};
     }
 };
 
 float rnd() { return (float) rand() / RAND_MAX; }
 
-const float epsilon = 0.0001f;
 
 class Scene {
     std::vector<Intersectable *> objects;
     std::vector<Cone *> cones;
-    std::vector<Light *> lights;
     Camera camera;
     vec3 La;
 public:
@@ -444,48 +405,61 @@ public:
         camera.set(eye, lookat, vup, fov);
 
         La = vec3(0.0f, 0.0f, 0.0f);
-        /*vec3 lightDirection(1, 1, 1), Le(1.5, 1.5, 1.5);
-        lights.push_back(new Light(lightDirection, Le));*/
 
-        vec3 kd(0.3f, 0.2f, 0.1f), ks(2, 2, 2);
-        for (int i = 0; i < 1; i++) {
-            //objects.push_back(new Sphere(vec3(rnd() - 0.5f, rnd() - 0.5f, rnd() - 0.5f), rnd() * 0.1f));
-            objects.push_back(new Cube(vec3(0.0f, 0.0f, 0.0f), 1));
-            objects.push_back(new IcosaHedron(vec3(0.3f, 0.0f, -0.2f), 0.3f));
-            objects.push_back(new DodecaHedron(vec3(-0.4f, 0.1f, -0.25f), 0.3f));
-            Cone *cone = new Cone(vec3(-0.500000f,0.022291f, 0.083970f), vec3(0.0f, -1.0f, 0.0f), 0.5f, 0.5f);
-            Cone *cone2 = new Cone(vec3(0.0f, 0.0f, 0.0f), vec3(1.0f, 0.0f, 0.0f), 0.3f, 0.1f);
-            Cone *cone3 = new Cone(vec3(-0.5f, 0.0f, 0.0f), vec3(0.0f, -1.0f, 0.0f), 0.3f, 0.8f);
-            cones.push_back(cone);
-            cones.push_back(cone2);
-            cones.push_back(cone3);
-            objects.push_back(cone);
-            objects.push_back(cone2);
-            objects.push_back(cone3);
-            //objects.push_back(new Cube(vec3(0.0f, 0.0f, 0.0f), 0.4));
-            //objects.push_back(new Triangle(vec3(1.0f, 0.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(2.0f, 2.0f, 0.0f)));
-        }
+        // The outer cube.
+        objects.push_back(new Cube(vec3(0.0f, 0.0f, 0.0f), 1));
+
+        // The Icosahedron on the left hand side.
+        objects.push_back(new IcosaHedron(vec3(0.3f, 0.0f, -0.2f), 0.3f));
+
+        // The Dodecahedron on the right hand side.
+        objects.push_back(new DodecaHedron(vec3(-0.4f, 0.1f, -0.25f), 0.3f));
+
+        // Getting some random coordinates for the cones.
+        Hit hRedCone = firstIntersect(camera.getRay(450, 500));
+        Hit hGreenCone = firstIntersect(camera.getRay(234, 160));
+        Hit hBlueCone = firstIntersect(camera.getRay(123, 345));
+
+        // Creating the lights.
+        auto *redLight = new Light(hRedCone.position + hRedCone.normal * epsilon * 50, vec3(0.2f, 0.0f, 0.0f));
+        auto *greenLight = new Light(hGreenCone.position + hGreenCone.normal * epsilon * 50, vec3(0.0f, 0.2f, 0.0f));
+        auto *blueLight = new Light(hBlueCone.position + hBlueCone.normal * epsilon * 50, vec3(0.0f, 0.0f, 0.2f));
+
+        // Creating the 3 cone (Listening device), storing them separately,
+        // to use them as lights, lights are connected to the cones.
+        Cone *redCone = new Cone(hRedCone.position - hRedCone.normal * 40 *epsilon, hRedCone.normal, 0.4, 0.1f, redLight);
+        Cone *greenCone = new Cone(hGreenCone.position - hGreenCone.normal * 40* epsilon, hGreenCone.normal, 0.4f, 0.1f, greenLight);
+        Cone *blueCone = new Cone(hBlueCone.position - hBlueCone.normal * 40 *epsilon, hBlueCone.normal, 0.4f, 0.1f, blueLight);
+
+        objects.push_back(redCone);
+        objects.push_back(greenCone);
+        objects.push_back(blueCone);
+
+        cones.push_back(redCone);
+        cones.push_back(greenCone);
+        cones.push_back(blueCone);
     }
 
     void refresh(int pX, int pY) {
         Hit hit = firstIntersect(camera.getRay(pX, 600 - pY));
         float shortestDistance = 1000.0f;
         Cone *closestCone;
-        for (auto &cone: cones) {
+        for (auto cone: cones) {
+            fprintf(stderr, "cone: %f %f %f\n", cone->p.x, cone->p.y, cone->p.z);
             float currentLength = abs(length(hit.position - cone->p));
             if (currentLength < shortestDistance) {
                 shortestDistance = currentLength;
                 closestCone = cone;
             }
         }
-        closestCone->p = hit.position;
-        fprintf(stderr, "X: %f, Y: %f, Z: %f\n", hit.position.x, hit.position.y, hit.position.z);
+        closestCone->p = hit.position - hit.normal * epsilon * 40;
         closestCone->n = hit.normal;
+        closestCone->light->position = hit.position + closestCone->n * epsilon * 50;
     }
 
     void render(std::vector<vec4> &image) {
         for (int Y = 0; Y < windowHeight; Y++) {
-#pragma omp parallel for
+                #pragma omp parallel for
             for (int X = 0; X < windowWidth; X++) {
                 vec3 color = trace(camera.getRay(X, Y));
                 image[Y * windowWidth + X] = vec4(color.x, color.y, color.z, 1);
@@ -503,29 +477,21 @@ public:
         return bestHit;
     }
 
-    bool shadowIntersect(Ray ray) {    // for directional lights
-        for (Intersectable *object: objects) if (object->intersect(ray).t > 0) return true;
-        return false;
-    }
-
     vec3 trace(Ray ray, int depth = 0) {
         Hit hit = firstIntersect(ray);
         if (hit.t < 0) return La;
-        float specularAmbient = (0.2f * (1.0f + dot(hit.normal, ray.dir * (-1.0f))));
-        vec3 temp = vec3(specularAmbient, specularAmbient, specularAmbient);
-        //fprintf(stderr, "Out: %f\n%f\n%f\n\n Lighted: %f\n%f\n%f\n\n", outRadiance.x, outRadiance.y, outRadiance.z,temp.x, temp.y, temp.z);
-        /*for (Light *light: lights) {
-            Ray shadowRay(hit.position + hit.normal * epsilon, light->direction);
-            float cosTheta = dot(hit.normal, light->direction);
-            if (cosTheta > 0 && !shadowIntersect(shadowRay)) {    // shadow computation
-                outRadiance = outRadiance + light->Le * hit.material->kd * cosTheta;
-                vec3 halfway = normalize(-ray.dir + light->direction);
-                float cosDelta = dot(hit.normal, halfway);
-                if (cosDelta > 0)
-                    outRadiance = outRadiance + light->Le * hit.material->ks * powf(cosDelta, hit.material->shininess);
+        float ambientFactor = (0.2f * (1.0f + dot(hit.normal, ray.dir * (-1.0f))));
+        vec3 specularAmbient = vec3(ambientFactor, ambientFactor, ambientFactor);
+        for (Cone *cone: cones) {
+            Ray rayToLight = Ray(hit.position + hit.normal * epsilon / 2.0f,
+                                 normalize(cone->light->position - hit.position));
+            Hit hitToLight = firstIntersect(rayToLight);
+            if (length(hitToLight.position - hit.position) > length(cone->light->position - hit.position)) {
+                specularAmbient = specularAmbient + cone->light->Le * (1.0f / hitToLight.t);
             }
-        }*/
-        return temp;
+
+        }
+        return specularAmbient;
     }
 };
 
@@ -599,7 +565,7 @@ void onInitialization() {
     long timeStart = glutGet(GLUT_ELAPSED_TIME);
     scene.render(image);
     long timeEnd = glutGet(GLUT_ELAPSED_TIME);
-    printf("Rendering time: %d milliseconds\n", (timeEnd - timeStart));
+    printf("Rendering time: %ld milliseconds\n", (timeEnd - timeStart));
 
     // copy image to GPU as a texture
     fullScreenTexturedQuad = new FullScreenTexturedQuad(windowWidth, windowHeight, image);
