@@ -102,17 +102,17 @@ struct Cube : public Intersectable {
                 vec3(-1.0f, 0.0f, 0.0f)
         };
 
-        for (auto & face : faces) {
+        for (auto &face: faces) {
             triangles.emplace_back(vertices[face[0] - 1] * side_length + center,
-                                         vertices[face[1] - 1] * side_length + center,
-                                         vertices[face[2] - 1] * side_length + center,
-                                         normals[face[3] - 1]);
+                                   vertices[face[1] - 1] * side_length + center,
+                                   vertices[face[2] - 1] * side_length + center,
+                                   normals[face[3] - 1]);
         }
     }
 
     Hit intersect(const Ray &ray) override {
         std::vector<Hit> hits;
-        for (auto & triangle : triangles) {
+        for (auto &triangle: triangles) {
             Hit hit = triangle.intersect(ray);
             if (hit.t > 0) {
                 hits.push_back(hit);
@@ -173,16 +173,16 @@ struct IcosaHedron : public Intersectable {
                 {5,  9,  1}
         };
 
-        for (auto & face : faces) {
+        for (auto &face: faces) {
             triangles.emplace_back(verticles[face[0] - 1] * scaling + center,
-                                         verticles[face[1] - 1] * scaling + center,
-                                         verticles[face[2] - 1] * scaling + center);
+                                   verticles[face[1] - 1] * scaling + center,
+                                   verticles[face[2] - 1] * scaling + center);
         }
     }
 
     Hit intersect(const Ray &ray) {
         std::vector<Hit> hits;
-        for (auto & triangle : triangles) {
+        for (auto &triangle: triangles) {
             Hit hit = triangle.intersect(ray);
             if (hit.t > 0) {
                 hits.push_back(hit);
@@ -272,16 +272,16 @@ struct DodecaHedron : public Intersectable {
                 {12, 13, 11},
                 {19, 12, 11}};
 
-        for (auto & face : faces) {
+        for (auto &face: faces) {
             triangles.emplace_back(verticles[face[0] - 1] * scaling + center,
-                                         verticles[face[1] - 1] * scaling + center,
-                                         verticles[face[2] - 1] * scaling + center);
+                                   verticles[face[1] - 1] * scaling + center,
+                                   verticles[face[2] - 1] * scaling + center);
         }
     }
 
     Hit intersect(const Ray &ray) {
         std::vector<Hit> hits;
-        for (auto & triangle : triangles) {
+        for (auto &triangle: triangles) {
             Hit hit = triangle.intersect(ray);
             if (hit.t > 0) {
                 hits.push_back(hit);
@@ -302,21 +302,28 @@ struct DodecaHedron : public Intersectable {
 const float epsilon = 0.0001f;
 
 struct Cone : Intersectable {
+    // The naming follows the notation on the 11. slide of the ray-tracing pdf.
     Light *light;
     vec3 p; // tip of the cone
     vec3 n; // unit vector in direction of increasing radius;
     float alfa; // angle between the axis and the surface
     float h; // height of the cone
+    const float EPSILON = epsilon * 40;
 
     Cone(vec3 p, vec3 n, float alfa, float h, Light *light) : light(light), p(p), n(n), alfa(alfa), h(h) {}
 
-    Hit intersect(const Ray& ray) {
+    Hit intersect(const Ray &ray) {
         Hit hit;
+        // Renaming the variables to keep notation consistent.
         vec3 s = ray.start;
         vec3 d = ray.dir;
+
+        // These are implemented based on the formula on the 11. slide of the ray-tracing pdf.
         float a = dot(d, n) * dot(d, n) - dot(d, d) * cosf(alfa) * cosf(alfa);
         float b = 2 * dot(d, n) * dot(s - p, n) - 2 * dot(d, s - p) * cosf(alfa) * cosf(alfa);
         float c = dot(s - p, n) * dot(s - p, n) - dot(s - p, s - p) * cosf(alfa) * cosf(alfa);
+
+        // The discriminant and the two possible intersection t-s.
         float D = b * b - 4 * a * c;
         float sqrt_discr = sqrtf(D);
         float t1 = (-b + sqrt_discr) / (2.0f * a);
@@ -325,46 +332,49 @@ struct Cone : Intersectable {
         bool t1Valid = false;
         bool t2Valid = false;
 
+        // We have to check both t-s, because there are several cases which we have to handle.
+        // case 1: both t-s are negative, which means that the ray is not intersecting the cone.
+        // case 2: both t-s are positive, and both of them fulfills isValidHit (we have to choose the closer one)
+        // case 3: both t-s are positive, but only one of them fulfills isValidHit (we have to choose the valid one)
+        if(t1 < 0 && t2 < 0) return {};
         if (t1 < t2) {
             hit.t = t1;
             hit.position = ray.start + ray.dir * hit.t;
-            t1Valid = checkIntersection(hit, p, n, alfa, h);
+            t1Valid = isValidHit(hit);
 
             if (!t1Valid) {
                 hit.t = t2;
                 hit.position = ray.start + ray.dir * hit.t;
-                t2Valid = checkIntersection(hit, p, n, alfa, h);
+                t2Valid = isValidHit(hit);
             }
         } else if (t2 < t1) {
             hit.t = t2;
             hit.position = ray.start + ray.dir * hit.t;
-            t2Valid = checkIntersection(hit, p, n, alfa, h);
+            t2Valid = isValidHit(hit);
 
             if (!t2Valid) {
                 hit.t = t1;
                 hit.position = ray.start + ray.dir * hit.t;
-                t1Valid = checkIntersection(hit, p, n, alfa, h);
+                t1Valid = isValidHit(hit);
             }
         }
 
         if (t1Valid || t2Valid) {
             hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
-            if (t2Valid) {
-                hit.normal = hit.normal * -1.0f;
-            }
             return hit;
         } else {
             return {};
         }
     }
 
-    bool checkIntersection(const Hit& hit, const vec3& p, const vec3& n, float alfa, float h) {
-        vec3 positionDiff = hit.position - p;
-        float positionLength = length(positionDiff);
-        float dotProduct = dot(positionDiff / positionLength, n);
+    // Returns true if the hit is on the surface of the cone and fulfills the conditions
+    // on the 11. slide of the ray-tracing pdf. (framed formula)
+    inline bool isValidHit(const Hit &hit) const {
+        vec3 positionDifference = hit.position - p;
+        float positionLength = length(positionDifference);
+        float dotProduct = dot(positionDifference / positionLength, n);
 
-        return (dotProduct >= cosf(alfa) - epsilon * 40.0f && dotProduct <= cosf(alfa) + epsilon * 40.0f &&
-                dot(hit.position - p, n) >= 0.0f && dot(hit.position - p, n) <= h);
+        return (dot(hit.position - p, n) >= 0.0f && dot(hit.position - p, n) <= h);
     }
 
 
@@ -427,9 +437,12 @@ public:
 
         // Creating the 3 cone (Listening device), storing them separately,
         // to use them as lights, lights are connected to the cones.
-        Cone *redCone = new Cone(hRedCone.position - hRedCone.normal * 40 *epsilon, hRedCone.normal, 0.4, 0.1f, redLight);
-        Cone *greenCone = new Cone(hGreenCone.position - hGreenCone.normal * 40* epsilon, hGreenCone.normal, 0.4f, 0.1f, greenLight);
-        Cone *blueCone = new Cone(hBlueCone.position - hBlueCone.normal * 40 *epsilon, hBlueCone.normal, 0.4f, 0.1f, blueLight);
+        Cone *redCone = new Cone(hRedCone.position - hRedCone.normal * 40 * epsilon, hRedCone.normal, 0.4, 0.1f,
+                                 redLight);
+        Cone *greenCone = new Cone(hGreenCone.position - hGreenCone.normal * 40 * epsilon, hGreenCone.normal, 0.4f,
+                                   0.1f, greenLight);
+        Cone *blueCone = new Cone(hBlueCone.position - hBlueCone.normal * 40 * epsilon, hBlueCone.normal, 0.4f, 0.1f,
+                                  blueLight);
 
         objects.push_back(redCone);
         objects.push_back(greenCone);
@@ -441,17 +454,23 @@ public:
     }
 
     void refresh(int pX, int pY) {
-        Hit hit = firstIntersect(camera.getRay(pX, 600 - pY));
-        float shortestDistance = 1000.0f;
+        // Shoot a ray from the camera to the pixel, where the mouse is.
+        Hit hit = firstIntersect(camera.getRay(pX, windowWidth - pY));
+        float shortestDistance = INFINITY;
         Cone *closestCone;
+
+        // Find the closest cone to the hit.
         for (auto cone: cones) {
-            fprintf(stderr, "cone: %f %f %f\n", cone->p.x, cone->p.y, cone->p.z);
             float currentLength = abs(length(hit.position - cone->p));
             if (currentLength < shortestDistance) {
                 shortestDistance = currentLength;
                 closestCone = cone;
             }
         }
+        // If there is no cone, return.
+        if(closestCone == nullptr) return;
+
+        // Move the cone to the hit position, and move the light to the hit position.
         closestCone->p = hit.position - hit.normal * epsilon * 40;
         closestCone->n = hit.normal;
         closestCone->light->position = hit.position + closestCone->n * epsilon * 50;
@@ -459,7 +478,7 @@ public:
 
     void render(std::vector<vec4> &image) {
         for (int Y = 0; Y < windowHeight; Y++) {
-                #pragma omp parallel for
+            #pragma omp parallel for
             for (int X = 0; X < windowWidth; X++) {
                 vec3 color = trace(camera.getRay(X, Y));
                 image[Y * windowWidth + X] = vec4(color.x, color.y, color.z, 1);
@@ -479,17 +498,24 @@ public:
 
     vec3 trace(Ray ray, int depth = 0) {
         Hit hit = firstIntersect(ray);
+        // If there is no intersection, return the background color.
         if (hit.t < 0) return La;
+        // The specular ambient factor of the point.
         float ambientFactor = (0.2f * (1.0f + dot(hit.normal, ray.dir * (-1.0f))));
         vec3 specularAmbient = vec3(ambientFactor, ambientFactor, ambientFactor);
+
+        // Looping through the cones, and checking if the light is visible from the point.
+        // If a light is visible, add the light to the specular ambient.
         for (Cone *cone: cones) {
+            // Use hit.normal * epsilon / 2.0f to avoid self intersection.
             Ray rayToLight = Ray(hit.position + hit.normal * epsilon / 2.0f,
                                  normalize(cone->light->position - hit.position));
             Hit hitToLight = firstIntersect(rayToLight);
+            // If the distance to the light is shorter than the distance to the hit, the light is visible.
             if (length(hitToLight.position - hit.position) > length(cone->light->position - hit.position)) {
+                // Add the light to the specular ambient. The light is attenuated by the distance.
                 specularAmbient = specularAmbient + cone->light->Le * (1.0f / hitToLight.t);
             }
-
         }
         return specularAmbient;
     }
@@ -593,8 +619,8 @@ void onKeyboardUp(unsigned char key, int pX, int pY) {
 void onMouse(int button, int state, int pX, int pY) {
     if (state == GLUT_DOWN) {
         if (button == GLUT_LEFT_BUTTON) {
+            // Refresh the scene with the new cone position.
             scene.refresh(pX, pY);
-
             std::vector<vec4> image(windowWidth * windowHeight);
             scene.render(image);
             delete fullScreenTexturedQuad;
