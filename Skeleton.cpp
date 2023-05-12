@@ -299,7 +299,7 @@ struct DodecaHedron : public Intersectable {
     }
 };
 
-const float epsilon = 0.0001f;
+constexpr const float epsilon = 0.0001f;
 
 struct Cone : Intersectable {
     // The naming follows the notation on the 11. slide of the ray-tracing pdf.
@@ -308,7 +308,6 @@ struct Cone : Intersectable {
     vec3 n; // unit vector in direction of increasing radius;
     float alfa; // angle between the axis and the surface
     float h; // height of the cone
-    const float EPSILON = epsilon * 40;
 
     Cone(vec3 p, vec3 n, float alfa, float h, Light *light) : light(light), p(p), n(n), alfa(alfa), h(h) {}
 
@@ -336,7 +335,6 @@ struct Cone : Intersectable {
         // case 1: both t-s are negative, which means that the ray is not intersecting the cone.
         // case 2: both t-s are positive, and both of them fulfills isValidHit (we have to choose the closer one)
         // case 3: both t-s are positive, but only one of them fulfills isValidHit (we have to choose the valid one)
-        if(t1 < 0 && t2 < 0) return {};
         if (t1 < t2) {
             hit.t = t1;
             hit.position = ray.start + ray.dir * hit.t;
@@ -370,13 +368,8 @@ struct Cone : Intersectable {
     // Returns true if the hit is on the surface of the cone and fulfills the conditions
     // on the 11. slide of the ray-tracing pdf. (framed formula)
     inline bool isValidHit(const Hit &hit) const {
-        vec3 positionDifference = hit.position - p;
-        float positionLength = length(positionDifference);
-        float dotProduct = dot(positionDifference / positionLength, n);
-
         return (dot(hit.position - p, n) >= 0.0f && dot(hit.position - p, n) <= h);
     }
-
 
 };
 
@@ -400,17 +393,16 @@ public:
     }
 };
 
-float rnd() { return (float) rand() / RAND_MAX; }
-
-
 class Scene {
     std::vector<Intersectable *> objects;
     std::vector<Cone *> cones;
     Camera camera;
     vec3 La;
 public:
+    constexpr const static float LIGHT_OFFSET_EPSILON = epsilon * 50;
+    constexpr const static float CONE_OFFSET_FROM_HIT_EPSILON = epsilon * 40;
     void build() {
-        vec3 eye = vec3(1.0f, 1.5f, 0.0f), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
+        vec3 eye = vec3(1.3f, 1.5f, -0.1f), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
         float fov = 45 * M_PI / 180;
         camera.set(eye, lookat, vup, fov);
 
@@ -427,21 +419,21 @@ public:
 
         // Getting some random coordinates for the cones.
         Hit hRedCone = firstIntersect(camera.getRay(450, 500));
-        Hit hGreenCone = firstIntersect(camera.getRay(234, 160));
-        Hit hBlueCone = firstIntersect(camera.getRay(123, 345));
+        Hit hGreenCone = firstIntersect(camera.getRay(281, 342));
+        Hit hBlueCone = firstIntersect(camera.getRay(234, 191));
 
         // Creating the lights.
-        auto *redLight = new Light(hRedCone.position + hRedCone.normal * epsilon * 50, vec3(0.2f, 0.0f, 0.0f));
-        auto *greenLight = new Light(hGreenCone.position + hGreenCone.normal * epsilon * 50, vec3(0.0f, 0.2f, 0.0f));
-        auto *blueLight = new Light(hBlueCone.position + hBlueCone.normal * epsilon * 50, vec3(0.0f, 0.0f, 0.2f));
+        auto *redLight = new Light(hRedCone.position + hRedCone.normal * LIGHT_OFFSET_EPSILON, vec3(0.2f, 0.0f, 0.0f));
+        auto *greenLight = new Light(hGreenCone.position + hGreenCone.normal * LIGHT_OFFSET_EPSILON, vec3(0.0f, 0.2f, 0.0f));
+        auto *blueLight = new Light(hBlueCone.position + hBlueCone.normal * LIGHT_OFFSET_EPSILON, vec3(0.0f, 0.0f, 0.2f));
 
         // Creating the 3 cone (Listening device), storing them separately,
         // to use them as lights, lights are connected to the cones.
-        Cone *redCone = new Cone(hRedCone.position - hRedCone.normal * 40 * epsilon, hRedCone.normal, 0.4, 0.1f,
+        Cone *redCone = new Cone(hRedCone.position - hRedCone.normal * CONE_OFFSET_FROM_HIT_EPSILON, hRedCone.normal, 0.4, 0.1f,
                                  redLight);
-        Cone *greenCone = new Cone(hGreenCone.position - hGreenCone.normal * 40 * epsilon, hGreenCone.normal, 0.4f,
+        Cone *greenCone = new Cone(hGreenCone.position - hGreenCone.normal * CONE_OFFSET_FROM_HIT_EPSILON, hGreenCone.normal, 0.4f,
                                    0.1f, greenLight);
-        Cone *blueCone = new Cone(hBlueCone.position - hBlueCone.normal * 40 * epsilon, hBlueCone.normal, 0.4f, 0.1f,
+        Cone *blueCone = new Cone(hBlueCone.position - hBlueCone.normal * CONE_OFFSET_FROM_HIT_EPSILON, hBlueCone.normal, 0.4f, 0.1f,
                                   blueLight);
 
         objects.push_back(redCone);
@@ -454,6 +446,7 @@ public:
     }
 
     void refresh(int pX, int pY) {
+        fprintf(stderr, "refresh at %d, %d\n", pX, pY);
         // Shoot a ray from the camera to the pixel, where the mouse is.
         Hit hit = firstIntersect(camera.getRay(pX, windowWidth - pY));
         float shortestDistance = INFINITY;
@@ -471,9 +464,9 @@ public:
         if(closestCone == nullptr) return;
 
         // Move the cone to the hit position, and move the light to the hit position.
-        closestCone->p = hit.position - hit.normal * epsilon * 40;
+        closestCone->p = hit.position - hit.normal * CONE_OFFSET_FROM_HIT_EPSILON;
         closestCone->n = hit.normal;
-        closestCone->light->position = hit.position + closestCone->n * epsilon * 50;
+        closestCone->light->position = hit.position + closestCone->n * LIGHT_OFFSET_EPSILON;
     }
 
     void render(std::vector<vec4> &image) {
@@ -508,13 +501,14 @@ public:
         // If a light is visible, add the light to the specular ambient.
         for (Cone *cone: cones) {
             // Use hit.normal * epsilon / 2.0f to avoid self intersection.
-            Ray rayToLight = Ray(hit.position + hit.normal * epsilon / 2.0f,
+            Ray rayToLight = Ray(hit.position + hit.normal * epsilon,
                                  normalize(cone->light->position - hit.position));
             Hit hitToLight = firstIntersect(rayToLight);
+            if(hitToLight.t < 0) continue;
             // If the distance to the light is shorter than the distance to the hit, the light is visible.
             if (length(hitToLight.position - hit.position) > length(cone->light->position - hit.position)) {
                 // Add the light to the specular ambient. The light is attenuated by the distance.
-                specularAmbient = specularAmbient + cone->light->Le * (1.0f / hitToLight.t);
+                specularAmbient = specularAmbient + cone->light->Le * (0.7f / hitToLight.t);
             }
         }
         return specularAmbient;
