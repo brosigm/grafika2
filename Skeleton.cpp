@@ -8,6 +8,12 @@ struct Hit {
     vec3 position, normal;
 
     Hit() { t = -1; }
+
+    Hit(float _t, vec3 _position, vec3 _normal) {
+        t = _t;
+        position = _position;
+        normal = _normal;
+    }
 };
 
 struct Ray {
@@ -312,63 +318,64 @@ struct Cone : Intersectable {
     Cone(vec3 p, vec3 n, float alfa, float h, Light *light) : light(light), p(p), n(n), alfa(alfa), h(h) {}
 
     Hit intersect(const Ray &ray) {
-        Hit hit;
         // Renaming the variables to keep notation consistent.
         vec3 s = ray.start;
         vec3 d = ray.dir;
 
         // These are implemented based on the formula on the 11. slide of the ray-tracing pdf.
-        float a = dot(d, n) * dot(d, n) - dot(d, d) * cosf(alfa) * cosf(alfa);
-        float b = 2 * dot(d, n) * dot(s - p, n) - 2 * dot(d, s - p) * cosf(alfa) * cosf(alfa);
-        float c = dot(s - p, n) * dot(s - p, n) - dot(s - p, s - p) * cosf(alfa) * cosf(alfa);
+        vec3 H = s - p;
+        float a = pow(dot(d, n), 2.0f) - pow(dot(d, d), 2.0f) * pow(cosf(alfa), 2.0f);
+        float b = 2 * (dot(d, n) * dot(H, n) - dot(d, H) * pow(cosf(alfa), 2.0f));
+        float c = pow(dot(H, n), 2.0f) - dot(H, H) * pow(cosf(alfa), 2.0f);
 
         // The discriminant and the two possible intersection t-s.
         float D = b * b - 4 * a * c;
+        if (D < 0) return {};
         float sqrt_discr = sqrtf(D);
-        float t1 = (-b + sqrt_discr) / (2.0f * a);
-        float t2 = (-b - sqrt_discr) / (2.0f * a);
-
-        bool t1Valid = false;
-        bool t2Valid = false;
-
-        // We have to check both t-s, because there are several cases which we have to handle.
-        // case 1: both t-s are negative, which means that the ray is not intersecting the cone.
-        // case 2: both t-s are positive, and both of them fulfills isValidHit (we have to choose the closer one)
-        // case 3: both t-s are positive, but only one of them fulfills isValidHit (we have to choose the valid one)
-        if (t1 < t2) {
-            hit.t = t1;
-            hit.position = ray.start + ray.dir * hit.t;
-            t1Valid = isValidHit(hit);
-
-            if (!t1Valid) {
-                hit.t = t2;
-                hit.position = ray.start + ray.dir * hit.t;
-                t2Valid = isValidHit(hit);
-            }
-        } else if (t2 < t1) {
-            hit.t = t2;
-            hit.position = ray.start + ray.dir * hit.t;
-            t2Valid = isValidHit(hit);
-
-            if (!t2Valid) {
-                hit.t = t1;
-                hit.position = ray.start + ray.dir * hit.t;
-                t1Valid = isValidHit(hit);
+        std::vector<std::pair<float, bool>> ts = {
+                {(-b + sqrt_discr) / (2 * a), false},
+                {(-b - sqrt_discr) / (2 * a), false}
+        };
+        for (auto &t: ts) {
+            if (t.first > 0) {
+                Hit hit;
+                hit.t = t.first;
+                hit.position = s + hit.t * d;
+                hit.normal = getNormal(hit);
+                if (isValidHit(hit)) t.second = true;
             }
         }
-
-        if (t1Valid || t2Valid) {
-            hit.normal = normalize(hit.position - p - n * dot(hit.position - p, n));
+        // We need the closest hit which is valid.
+        if (ts[0].first > ts[1].first) {
+            std::swap(ts[0], ts[1]);
+        }
+        Hit hit;
+        if (ts[0].second) {
+            hit.t = ts[0].first;
+            hit.position = s + hit.t * d;
+            hit.normal = getNormal(hit);
+            return hit;
+        } else if (ts[1].second) {
+            hit.t = ts[1].first;
+            hit.position = s + hit.t * d;
+            hit.normal = (-1.0) * getNormal(hit);
             return hit;
         } else {
-            return {};
+            return hit;
         }
+
+
     }
 
     // Returns true if the hit is on the surface of the cone and fulfills the conditions
     // on the 11. slide of the ray-tracing pdf. (framed formula)
     inline bool isValidHit(const Hit &hit) const {
-        return (dot(hit.position - p, n) >= 0.0f && dot(hit.position - p, n) <= h);
+        float dotProduct = dot(hit.position - p, n);
+        return (0.0f <= dotProduct && dotProduct <= h);
+    }
+
+    inline vec3 getNormal(const Hit &hit) const {
+        return normalize(hit.position - p - (length(hit.position - p) * cosf(alfa)) * n);
     }
 
 };
@@ -399,10 +406,11 @@ class Scene {
     Camera camera;
     vec3 La;
 public:
-    constexpr const static float LIGHT_OFFSET_EPSILON = epsilon * 50;
-    constexpr const static float CONE_OFFSET_FROM_HIT_EPSILON = epsilon * 40;
+    constexpr const static float LIGHT_OFFSET_EPSILON = epsilon * 10;
+    constexpr const static float CONE_OFFSET_FROM_HIT_EPSILON = epsilon * 10;
+
     void build() {
-        vec3 eye = vec3(1.3f, 1.5f, -0.1f), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
+        vec3 eye = vec3(0.9f, 1.6f, -0.1f), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
         float fov = 45 * M_PI / 180;
         camera.set(eye, lookat, vup, fov);
 
@@ -418,23 +426,25 @@ public:
         objects.push_back(new DodecaHedron(vec3(-0.4f, 0.1f, -0.25f), 0.3f));
 
         // Getting some random coordinates for the cones.
-        Hit hRedCone = firstIntersect(camera.getRay(450, 500));
-        Hit hGreenCone = firstIntersect(camera.getRay(281, 342));
-        Hit hBlueCone = firstIntersect(camera.getRay(234, 191));
+        Hit hRedCone = firstIntersect(camera.getRay(272, 158));
+        Hit hGreenCone = firstIntersect(camera.getRay(450, 500));
+        Hit hBlueCone = firstIntersect(camera.getRay(324, 393));
 
         // Creating the lights.
         auto *redLight = new Light(hRedCone.position + hRedCone.normal * LIGHT_OFFSET_EPSILON, vec3(0.2f, 0.0f, 0.0f));
-        auto *greenLight = new Light(hGreenCone.position + hGreenCone.normal * LIGHT_OFFSET_EPSILON, vec3(0.0f, 0.2f, 0.0f));
-        auto *blueLight = new Light(hBlueCone.position + hBlueCone.normal * LIGHT_OFFSET_EPSILON, vec3(0.0f, 0.0f, 0.2f));
+        auto *greenLight = new Light(hGreenCone.position + hGreenCone.normal * LIGHT_OFFSET_EPSILON,
+                                     vec3(0.0f, 0.2f, 0.0f));
+        auto *blueLight = new Light(hBlueCone.position + hBlueCone.normal * LIGHT_OFFSET_EPSILON,
+                                    vec3(0.0f, 0.0f, 0.2f));
 
         // Creating the 3 cone (Listening device), storing them separately,
         // to use them as lights, lights are connected to the cones.
-        Cone *redCone = new Cone(hRedCone.position - hRedCone.normal * CONE_OFFSET_FROM_HIT_EPSILON, hRedCone.normal, 0.4, 0.1f,
-                                 redLight);
-        Cone *greenCone = new Cone(hGreenCone.position - hGreenCone.normal * CONE_OFFSET_FROM_HIT_EPSILON, hGreenCone.normal, 0.4f,
-                                   0.1f, greenLight);
-        Cone *blueCone = new Cone(hBlueCone.position - hBlueCone.normal * CONE_OFFSET_FROM_HIT_EPSILON, hBlueCone.normal, 0.4f, 0.1f,
-                                  blueLight);
+        Cone *redCone = new Cone(hRedCone.position - hRedCone.normal * CONE_OFFSET_FROM_HIT_EPSILON,
+                                 hRedCone.normal, 0.4, 0.1f, redLight);
+        Cone *greenCone = new Cone(hGreenCone.position - hGreenCone.normal * CONE_OFFSET_FROM_HIT_EPSILON,
+                                   hGreenCone.normal, 0.4f, 0.1f, greenLight);
+        Cone *blueCone = new Cone(hBlueCone.position - hBlueCone.normal * CONE_OFFSET_FROM_HIT_EPSILON,
+                                  hBlueCone.normal, 0.4f, 0.1f, blueLight);
 
         objects.push_back(redCone);
         objects.push_back(greenCone);
@@ -461,7 +471,7 @@ public:
             }
         }
         // If there is no cone, return.
-        if(closestCone == nullptr) return;
+        if (closestCone == nullptr) return;
 
         // Move the cone to the hit position, and move the light to the hit position.
         closestCone->p = hit.position - hit.normal * CONE_OFFSET_FROM_HIT_EPSILON;
@@ -471,7 +481,7 @@ public:
 
     void render(std::vector<vec4> &image) {
         for (int Y = 0; Y < windowHeight; Y++) {
-            #pragma omp parallel for
+#pragma omp parallel for
             for (int X = 0; X < windowWidth; X++) {
                 vec3 color = trace(camera.getRay(X, Y));
                 image[Y * windowWidth + X] = vec4(color.x, color.y, color.z, 1);
@@ -494,21 +504,21 @@ public:
         // If there is no intersection, return the background color.
         if (hit.t < 0) return La;
         // The specular ambient factor of the point.
-        float ambientFactor = (0.2f * (1.0f + dot(hit.normal, ray.dir * (-1.0f))));
+        float ambientFactor = (0.2f * (1.0f + dot(hit.normal, ray.dir * (-1))));
         vec3 specularAmbient = vec3(ambientFactor, ambientFactor, ambientFactor);
 
         // Looping through the cones, and checking if the light is visible from the point.
         // If a light is visible, add the light to the specular ambient.
         for (Cone *cone: cones) {
-            // Use hit.normal * epsilon / 2.0f to avoid self intersection.
+            // Use hit.normal * epsilon to avoid self intersection.
             Ray rayToLight = Ray(hit.position + hit.normal * epsilon,
                                  normalize(cone->light->position - hit.position));
             Hit hitToLight = firstIntersect(rayToLight);
-            if(hitToLight.t < 0) continue;
+            if (hitToLight.t < 0) continue;
             // If the distance to the light is shorter than the distance to the hit, the light is visible.
             if (length(hitToLight.position - hit.position) > length(cone->light->position - hit.position)) {
                 // Add the light to the specular ambient. The light is attenuated by the distance.
-                specularAmbient = specularAmbient + cone->light->Le * (0.7f / hitToLight.t);
+                specularAmbient = specularAmbient + cone->light->Le * (1.0f / hitToLight.t);
             }
         }
         return specularAmbient;
@@ -575,13 +585,13 @@ public:
 };
 
 FullScreenTexturedQuad *fullScreenTexturedQuad;
+std::vector<vec4> image(windowWidth * windowHeight);
 
 // Initialization, create an OpenGL context
 void onInitialization() {
     glViewport(0, 0, windowWidth, windowHeight);
     scene.build();
 
-    std::vector<vec4> image(windowWidth * windowHeight);
     long timeStart = glutGet(GLUT_ELAPSED_TIME);
     scene.render(image);
     long timeEnd = glutGet(GLUT_ELAPSED_TIME);
@@ -615,7 +625,6 @@ void onMouse(int button, int state, int pX, int pY) {
         if (button == GLUT_LEFT_BUTTON) {
             // Refresh the scene with the new cone position.
             scene.refresh(pX, pY);
-            std::vector<vec4> image(windowWidth * windowHeight);
             scene.render(image);
             delete fullScreenTexturedQuad;
             fullScreenTexturedQuad = new FullScreenTexturedQuad(windowWidth, windowHeight, image);
