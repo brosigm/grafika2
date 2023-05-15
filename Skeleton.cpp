@@ -1,19 +1,44 @@
 //=============================================================================================
-// Computer Graphics Sample Program: Ray-tracing-let
+// Mintaprogram: Zold haromszog. Ervenyes 2019. osztol.
+//
+// A beadott program csak ebben a fajlban lehet, a fajl 1 byte-os ASCII karaktereket tartalmazhat, BOM kihuzando.
+// Tilos:
+// - mast "beincludolni", illetve mas konyvtarat hasznalni
+// - faljmuveleteket vegezni a printf-et kiveve
+// - Mashonnan atvett programresszleteket forrasmegjeloles nelkul felhasznalni es
+// - felesleges programsorokat a beadott programban hagyni!!!!!!!
+// - felesleges kommenteket a beadott programba irni a forrasmegjelolest kommentjeit kiveve
+// ---------------------------------------------------------------------------------------------
+// A feladatot ANSI C++ nyelvu forditoprogrammal ellenorizzuk, a Visual Studio-hoz kepesti elteresekrol
+// es a leggyakoribb hibakrol (pl. ideiglenes objektumot nem lehet referencia tipusnak ertekul adni)
+// a hazibeado portal ad egy osszefoglalot.
+// ---------------------------------------------------------------------------------------------
+// A feladatmegoldasokban csak olyan OpenGL fuggvenyek hasznalhatok, amelyek az oran a feladatkiadasig elhangzottak
+// A keretben nem szereplo GLUT fuggvenyek tiltottak.
+//
+// NYILATKOZAT
+// ---------------------------------------------------------------------------------------------
+// Nev    : Brosig Marton Janos
+// Neptun : A0897X
+// ---------------------------------------------------------------------------------------------
+// ezennel kijelentem, hogy a feladatot magam keszitettem, es ha barmilyen segitseget igenybe vettem vagy
+// mas szellemi termeket felhasznaltam, akkor a forrast es az atvett reszt kommentekben egyertelmuen jeloltem.
+// A forrasmegjeloles kotelme vonatkozik az eloadas foliakat es a targy oktatoi, illetve a
+// grafhazi doktor tanacsait kiveve barmilyen csatornan (szoban, irasban, Interneten, stb.) erkezo minden egyeb
+// informaciora (keplet, program, algoritmus, stb.). Kijelentem, hogy a forrasmegjelolessel atvett reszeket is ertem,
+// azok helyessegere matematikai bizonyitast tudok adni. Tisztaban vagyok azzal, hogy az atvett reszek nem szamitanak
+// a sajat kontribucioba, igy a feladat elfogadasarol a tobbi resz mennyisege es minosege alapjan szuletik dontes.
+// Tudomasul veszem, hogy a forrasmegjeloles kotelmenek megsertese eseten a hazifeladatra adhato pontokat
+// negativ elojellel szamoljak el es ezzel parhuzamosan eljaras is indul velem szemben.
 //=============================================================================================
 #include "framework.h"
+// A program elkeszitesehez a Minimal sugarkoveto CPU-n program forraskodjat hasznaltam fel.
 
 struct Hit {
     float t;
     vec3 position, normal;
 
     Hit() { t = -1; }
-
-    Hit(float _t, vec3 _position, vec3 _normal) {
-        t = _t;
-        position = _position;
-        normal = _normal;
-    }
 };
 
 struct Ray {
@@ -30,7 +55,6 @@ public:
     virtual Hit intersect(const Ray &ray) = 0;
 };
 
-// Triangle intersection based on 12. page of the ray-tracing pdf.
 struct Triangle : public Intersectable {
     vec3 r1, r2, r3;
     vec3 n;
@@ -49,16 +73,20 @@ struct Triangle : public Intersectable {
         n = _n;
     }
 
-    Hit intersect(const Ray &ray) {
+    // A haromszog inteszekciojat a ray-tracing pdf 12. oldalan talalhato keplet alapjan szamoljuk.
+    Hit intersect(const Ray &ray) override {
         Hit hit;
         float t = dot(r1 - ray.start, n) / dot(ray.dir, n);
         if (t <= 0) return hit;
         vec3 p = ray.start + ray.dir * t;
+        // Megnezzuk hogy a pont a haromszogon belul van-e.
         if (dot(cross(r2 - r1, p - r1), n) > 0 &&
             dot(cross(r3 - r2, p - r2), n) > 0 &&
             dot(cross(r1 - r3, p - r3), n) > 0) {
             hit.t = t;
             hit.position = p;
+            // Normal vektor iranyaval nem kell foglalkoznunk (elofordulhat hogy "rossz"
+            // iranyba mutat, ekkor a firstIntersect fugveny majd megforditja.
             hit.normal = n;
         }
         return hit;
@@ -66,6 +94,8 @@ struct Triangle : public Intersectable {
 };
 
 struct Cube : public Intersectable {
+    // Haromszogekbol epitjuk fel a kockat a obj definicio alapjan. Rendelkezesunkre bocsatjak a normal
+    // vektorokat is, ezeket is felhasznaljuk.
     std::vector<Triangle> triangles;
     vec3 center;
     float side_length;
@@ -84,7 +114,8 @@ struct Cube : public Intersectable {
         };
 
         std::vector<std::vector<int>> faces = {
-                // the first 3 numbers are the indices of the vertices of the triangle, the last is the normal vectors.
+                // Az elso 3 szam megmondja, hogy melyik pontok alkotnak egy lapot.
+                // Az utolso parameter azt mondja meg, hogy milyen indexu normalvektor tartozik hozza. (index + 1)
                 {1, 7, 5, 2},
                 {1, 3, 7, 2},
                 {1, 4, 3, 6},
@@ -109,6 +140,9 @@ struct Cube : public Intersectable {
         };
 
         for (auto &face: faces) {
+            // Az obj file segitsegevel egyesevel haromszogenkent hozzuk letre a kockat.
+            // A side_length valtozo segitsegevel meretezzuk a kockat.
+            // A center vallttozo segitsegevel eltolhatjuk a kockat.
             triangles.emplace_back(vertices[face[0] - 1] * side_length + center,
                                    vertices[face[1] - 1] * side_length + center,
                                    vertices[face[2] - 1] * side_length + center,
@@ -118,12 +152,17 @@ struct Cube : public Intersectable {
 
     Hit intersect(const Ray &ray) override {
         std::vector<Hit> hits;
+        // Vegignezzuk a test osszes haromszoget, amelyeket metszunk, azokat eltaroljuk.
         for (auto &triangle: triangles) {
             Hit hit = triangle.intersect(ray);
+            // Ervenytelen metszeseket nem tarolunk.
             if (hit.t > 0) {
                 hits.push_back(hit);
             }
         }
+        // Amennyiben nem talaltunk metszest, ures Hit-et adunk vissza, egyebkent megkeressuk
+        // a tavolabbi metszespontot, ezzel elerjuk hogy mindig a "hatso" falakat lassuk,
+        // ezzel atlatszo lesz a kocka hozzank kozelebb allo fala.
         if (!hits.empty()) {
             if (hits[0].t < hits[1].t) {
                 return hits[1];
@@ -142,6 +181,7 @@ struct IcosaHedron : public Intersectable {
     std::vector<Triangle> triangles;
 
     IcosaHedron(const vec3 &center, const float &scaling) : center(center), scaling(scaling) {
+        // Az obj file-ban talalhato ertekeket hard-code-olva eltaroljuk.
         std::vector<vec3> verticles = {
                 vec3(0, -0.525731, 0.850651),
                 vec3(0.850651, 0, 0.525731),
@@ -180,13 +220,16 @@ struct IcosaHedron : public Intersectable {
         };
 
         for (auto &face: faces) {
+            // Letrehozunk egy haromszoget minden eltarolt lapra, a megadott meretezes es eltolas
+            // segitsegevel.
             triangles.emplace_back(verticles[face[0] - 1] * scaling + center,
                                    verticles[face[1] - 1] * scaling + center,
                                    verticles[face[2] - 1] * scaling + center);
         }
     }
 
-    Hit intersect(const Ray &ray) {
+    Hit intersect(const Ray &ray) override {
+        // Vegigmegyunk a haromszogeken, es megkeressuk a metszespontokat.
         std::vector<Hit> hits;
         for (auto &triangle: triangles) {
             Hit hit = triangle.intersect(ray);
@@ -194,6 +237,7 @@ struct IcosaHedron : public Intersectable {
                 hits.push_back(hit);
             }
         }
+        // Amennyiben nem talaltunk metszest, ures Hit-et adunk vissza, egyebkent a legkozelebbit adjuk vissza.
         if (!hits.empty()) {
             if (hits[0].t > hits[1].t) {
                 return hits[1];
@@ -217,6 +261,7 @@ struct Light {
 struct DodecaHedron : public Intersectable {
     std::vector<Triangle> triangles;
 
+    // Az obj file-ban talalhato ertekeket hard-code-olva eltaroljuk.
     DodecaHedron(vec3 center, float scaling) {
         std::vector<vec3> verticles = {
                 vec3(-0.57735, -0.57735, 0.57735),
@@ -279,13 +324,16 @@ struct DodecaHedron : public Intersectable {
                 {19, 12, 11}};
 
         for (auto &face: faces) {
+            // Letrehozunk egy haromszoget minden eltarolt lapra, a megadott meretezes es eltolas
+            // segitsegevel.
             triangles.emplace_back(verticles[face[0] - 1] * scaling + center,
                                    verticles[face[1] - 1] * scaling + center,
                                    verticles[face[2] - 1] * scaling + center);
         }
     }
 
-    Hit intersect(const Ray &ray) {
+    Hit intersect(const Ray &ray) override {
+        // Vegigmegyunk a haromszogeken, es megkeressuk a metszespontokat.
         std::vector<Hit> hits;
         for (auto &triangle: triangles) {
             Hit hit = triangle.intersect(ray);
@@ -293,6 +341,7 @@ struct DodecaHedron : public Intersectable {
                 hits.push_back(hit);
             }
         }
+        // Amennyiben nem talaltunk metszest, ures Hit-et adunk vissza, egyebkent a legkozelebbit adjuk vissza.
         if (!hits.empty()) {
             if (hits[0].t > hits[1].t) {
                 return hits[1];
@@ -308,34 +357,37 @@ struct DodecaHedron : public Intersectable {
 constexpr const float epsilon = 0.0001f;
 
 struct Cone : Intersectable {
-    // The naming follows the notation on the 11. slide of the ray-tracing pdf.
+    // Az elnevezesek a ray-tracing pdf 11. diajan talalhato jeloleseket kovetik.
     Light *light;
-    vec3 p; // tip of the cone
-    vec3 n; // unit vector in direction of increasing radius;
-    float alfa; // angle between the axis and the surface
-    float h; // height of the cone
+    vec3 p; // a kup csucsa
+    vec3 n; // egyseg vektor, mely a tengely iranyat mutatja
+    float alfa; // bezart szog
+    float h; // magassag
 
     Cone(vec3 p, vec3 n, float alfa, float h, Light *light) : light(light), p(p), n(n), alfa(alfa), h(h) {}
 
     Hit intersect(const Ray &ray) {
-        // Renaming the variables to keep notation consistent.
+        // Kulon valtozoval taroljuk a sugar kezdo es vegpontjat, hogy konnyebben olvashato legyen a kod.
         vec3 s = ray.start;
         vec3 d = ray.dir;
 
-        // These are implemented based on the formula on the 11. slide of the ray-tracing pdf.
+        // Ezeket a kepleteket a ray-tracing pdf 11. diajan talalhato kepletek alapjan implementaltam.
         vec3 H = s - p;
+        float halfa = alfa / 2;
         float a = pow(dot(d, n), 2.0f) - pow(dot(d, d), 2.0f) * pow(cosf(alfa), 2.0f);
         float b = 2 * (dot(d, n) * dot(H, n) - dot(d, H) * pow(cosf(alfa), 2.0f));
         float c = pow(dot(H, n), 2.0f) - dot(H, H) * pow(cosf(alfa), 2.0f);
 
-        // The discriminant and the two possible intersection t-s.
+        // A diszkriminans es a ket lehetseges t ertek kiszamitasa.
         float D = b * b - 4 * a * c;
         if (D < 0) return {};
         float sqrt_discr = sqrtf(D);
+        // Eltaroljuk egy vectorban a ket lehetseges t erteket, es hogy melyik valid. (valid jelentese hogy a palast h alatti reszen van)
         std::vector<std::pair<float, bool>> ts = {
                 {(-b + sqrt_discr) / (2 * a), false},
                 {(-b - sqrt_discr) / (2 * a), false}
         };
+        // Beallitjuk a valid valtozokat.
         for (auto &t: ts) {
             if (t.first > 0) {
                 Hit hit;
@@ -345,11 +397,13 @@ struct Cone : Intersectable {
                 if (isValidHit(hit)) t.second = true;
             }
         }
-        // We need the closest hit which is valid.
+        // A legkozelebbire van szuksegunk ami valid, ezert rendezzuk a vectorunket.
         if (ts[0].first > ts[1].first) {
             std::swap(ts[0], ts[1]);
         }
         Hit hit;
+        // Ha az elso valid akkor azt valasztjuk, ha nem akkor megnezzuk, hogy a masodik valid-e
+        // Ha az sem valid, akkor nincs metszespont, ures hitet adunk vissza.
         if (ts[0].second) {
             hit.t = ts[0].first;
             hit.position = s + hit.t * d;
@@ -358,24 +412,25 @@ struct Cone : Intersectable {
         } else if (ts[1].second) {
             hit.t = ts[1].first;
             hit.position = s + hit.t * d;
-            hit.normal = (-1.0) * getNormal(hit);
+            hit.normal = getNormal(hit);
             return hit;
         } else {
             return hit;
         }
-
-
     }
 
-    // Returns true if the hit is on the surface of the cone and fulfills the conditions
-    // on the 11. slide of the ray-tracing pdf. (framed formula)
+    // Igazat ad visza, ha a hit pozicioja a kup h magassaga alatt van.
+    // a sugarkovetes pdf 11. diajan talalhato keplet alapjan implementaltam. (bekeretezett keplet)
     inline bool isValidHit(const Hit &hit) const {
         float dotProduct = dot(hit.position - p, n);
         return (0.0f <= dotProduct && dotProduct <= h);
     }
 
     inline vec3 getNormal(const Hit &hit) const {
-        return normalize(hit.position - p - (length(hit.position - p) * cosf(alfa)) * n);
+        // b / cos(alfa/2) -> a befogobol az atfogo hossza (b a befogo)
+        // length(hit.postion-p) -> hasonlo haromszogek, meghatarozzuk b hosszat, ezzel megkapjuk a
+        // tengely iranyu vektort, amivel mar csak el kell tolnunk a hit.position - p-t, hogy egysegvektor legyen.
+        return normalize(hit.position - p - (length(hit.position - p) / cosf(alfa)) * n);
     }
 
 };
@@ -406,39 +461,42 @@ class Scene {
     Camera camera;
     vec3 La;
 public:
-    constexpr const static float LIGHT_OFFSET_EPSILON = epsilon * 10;
-    constexpr const static float CONE_OFFSET_FROM_HIT_EPSILON = epsilon * 10;
+    // Milyen tavolsagra van a "megfigyelo" keszulek a kupok csucsatol (ertelemszeruen az iranyvektor iranyaba)
+    constexpr const static float LIGHT_OFFSET_EPSILON = epsilon * 40;
+    // A kupokat egy kicsit belesulyesztettem az eppen alatta levo objektumba,
+    // igy termeszetesebben nez ki, es elkerulhetem a fenyeles miatti csillogo reszet a kup aljanak.
+    constexpr const static float CONE_OFFSET_FROM_HIT_EPSILON = epsilon * 30;
 
     void build() {
-        vec3 eye = vec3(0.9f, 1.6f, -0.1f), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
+        vec3 eye = vec3(1.0, 1.5f, -0.1f), vup = vec3(0, 0, 1), lookat = vec3(0, 0, 0);
         float fov = 45 * M_PI / 180;
         camera.set(eye, lookat, vup, fov);
 
+        // Hatterszinuk a feladatleiras szerint fekete.
         La = vec3(0.0f, 0.0f, 0.0f);
 
-        // The outer cube.
+        // A kocka
         objects.push_back(new Cube(vec3(0.0f, 0.0f, 0.0f), 1));
 
-        // The Icosahedron on the left hand side.
-        objects.push_back(new IcosaHedron(vec3(0.3f, 0.0f, -0.2f), 0.3f));
+        // A bal oldalon talahato ikozahedron.
+        objects.push_back(new IcosaHedron(vec3(0.3f, 0.0f, -0.2f), 0.25f));
 
-        // The Dodecahedron on the right hand side.
-        objects.push_back(new DodecaHedron(vec3(-0.4f, 0.1f, -0.25f), 0.3f));
+        // A jobb oldalon talalhato dodekahedron.
+        objects.push_back(new DodecaHedron(vec3(-0.2f, 0.10f, -0.25f), 0.25f));
 
-        // Getting some random coordinates for the cones.
-        Hit hRedCone = firstIntersect(camera.getRay(272, 158));
+        // Nehany random koordinata a kupoknak.
+        Hit hRedCone = firstIntersect(camera.getRay(230, 200));
         Hit hGreenCone = firstIntersect(camera.getRay(450, 500));
         Hit hBlueCone = firstIntersect(camera.getRay(324, 393));
 
-        // Creating the lights.
+        // Lehallgatokeszulekek letrehozasa.
         auto *redLight = new Light(hRedCone.position + hRedCone.normal * LIGHT_OFFSET_EPSILON, vec3(0.2f, 0.0f, 0.0f));
         auto *greenLight = new Light(hGreenCone.position + hGreenCone.normal * LIGHT_OFFSET_EPSILON,
                                      vec3(0.0f, 0.2f, 0.0f));
         auto *blueLight = new Light(hBlueCone.position + hBlueCone.normal * LIGHT_OFFSET_EPSILON,
                                     vec3(0.0f, 0.0f, 0.2f));
 
-        // Creating the 3 cone (Listening device), storing them separately,
-        // to use them as lights, lights are connected to the cones.
+        // Mivel a kupokhoz egyertelmuen kapcsolodik egy lehallgato keszulek, ezert a kupok taroljak a lehallgato keszulekeiket.
         Cone *redCone = new Cone(hRedCone.position - hRedCone.normal * CONE_OFFSET_FROM_HIT_EPSILON,
                                  hRedCone.normal, 0.4, 0.1f, redLight);
         Cone *greenCone = new Cone(hGreenCone.position - hGreenCone.normal * CONE_OFFSET_FROM_HIT_EPSILON,
@@ -456,13 +514,12 @@ public:
     }
 
     void refresh(int pX, int pY) {
-        fprintf(stderr, "refresh at %d, %d\n", pX, pY);
-        // Shoot a ray from the camera to the pixel, where the mouse is.
+        // Kilovunk egy sugarat a felhasznalo altal kattintott pontba.
         Hit hit = firstIntersect(camera.getRay(pX, windowWidth - pY));
         float shortestDistance = INFINITY;
-        Cone *closestCone;
+        Cone *closestCone = nullptr;
 
-        // Find the closest cone to the hit.
+        // Megkeressuk a legkozelebbi kupot.
         for (auto cone: cones) {
             float currentLength = abs(length(hit.position - cone->p));
             if (currentLength < shortestDistance) {
@@ -470,10 +527,10 @@ public:
                 closestCone = cone;
             }
         }
-        // If there is no cone, return.
+        // Ha nincs ilyen kup, akkor visszaterunk.
         if (closestCone == nullptr) return;
 
-        // Move the cone to the hit position, and move the light to the hit position.
+        // Ha van ilyen kup, akkor athelyezzuk a benne levo lampat, es a kupot az uj helyere.
         closestCone->p = hit.position - hit.normal * CONE_OFFSET_FROM_HIT_EPSILON;
         closestCone->n = hit.normal;
         closestCone->light->position = hit.position + closestCone->n * LIGHT_OFFSET_EPSILON;
@@ -501,24 +558,28 @@ public:
 
     vec3 trace(Ray ray, int depth = 0) {
         Hit hit = firstIntersect(ray);
-        // If there is no intersection, return the background color.
+        // Ha nincsen talalat, akkor visszaterunk a hatter szinnel.
         if (hit.t < 0) return La;
-        // The specular ambient factor of the point.
+        // A spekularis ambiens szinkomponens szamitasa.
         float ambientFactor = (0.2f * (1.0f + dot(hit.normal, ray.dir * (-1))));
         vec3 specularAmbient = vec3(ambientFactor, ambientFactor, ambientFactor);
 
-        // Looping through the cones, and checking if the light is visible from the point.
-        // If a light is visible, add the light to the specular ambient.
+        // Vegigmegyunk a lehallgatokeszulekek listajan, es megnezzuk, hogy a sugarunk eleri-e oket.
+        // Ha egy lehallgatokeszulek elerheto a pontunkbol az ambiens fenyekhez hozzakeverjuk a lampa szineit.
         for (Cone *cone: cones) {
-            // Use hit.normal * epsilon to avoid self intersection.
+            // Kilovunk egy sugarat a pontunkbol a lehallgatokeszulek fele. (epsilon: hogy nehogy onmagat talalja el)
             Ray rayToLight = Ray(hit.position + hit.normal * epsilon,
                                  normalize(cone->light->position - hit.position));
             Hit hitToLight = firstIntersect(rayToLight);
             if (hitToLight.t < 0) continue;
             // If the distance to the light is shorter than the distance to the hit, the light is visible.
+            // Ha a kapott hit tavolsaga nagyobb, mint a feny tavolsaga, akkor a feny elerheto. (ezert emeltuk ki a kupbol egy kicsit a fenyt)
             if (length(hitToLight.position - hit.position) > length(cone->light->position - hit.position)) {
-                // Add the light to the specular ambient. The light is attenuated by the distance.
-                specularAmbient = specularAmbient + cone->light->Le * (1.0f / hitToLight.t);
+                // Hozzaadjuk a lehallgatokeszulek szinet az ambiens szinkomponenshez.
+                // Figyelunk ra hogy nehogy 1 feletti erteket kapjunk.
+                float multiplier = 1.0f / hitToLight.t;
+                multiplier = multiplier > 3.0f ? 3.0f : multiplier;
+                specularAmbient = specularAmbient + cone->light->Le * multiplier;
             }
         }
         return specularAmbient;
@@ -623,7 +684,7 @@ void onKeyboardUp(unsigned char key, int pX, int pY) {
 void onMouse(int button, int state, int pX, int pY) {
     if (state == GLUT_DOWN) {
         if (button == GLUT_LEFT_BUTTON) {
-            // Refresh the scene with the new cone position.
+            // Bal klikk eseten ujrarajzoljuk a kepet a valltoztatasok utan.
             scene.refresh(pX, pY);
             scene.render(image);
             delete fullScreenTexturedQuad;
