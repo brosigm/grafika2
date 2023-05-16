@@ -373,23 +373,22 @@ struct Cone : Intersectable {
 
         // Ezeket a kepleteket a ray-tracing pdf 11. diajan talalhato kepletek alapjan implementaltam.
         vec3 H = s - p;
-        float halfa = alfa / 2;
-        float a = pow(dot(d, n), 2.0f) - pow(dot(d, d), 2.0f) * pow(cosf(alfa), 2.0f);
-        float b = 2 * (dot(d, n) * dot(H, n) - dot(d, H) * pow(cosf(alfa), 2.0f));
+        float a = pow(dot(d, n), 2.0f) - dot(d, d) * pow(cosf(alfa), 2.0f);
+        float b = 2.0f * (dot(d, n) * dot(H, n) - dot(d, H) * pow(cosf(alfa), 2.0f));
         float c = pow(dot(H, n), 2.0f) - dot(H, H) * pow(cosf(alfa), 2.0f);
 
         // A diszkriminans es a ket lehetseges t ertek kiszamitasa.
-        float D = b * b - 4 * a * c;
-        if (D < 0) return {};
+        float D = b * b - 4.0f * a * c;
+        if (D < 0.0f) return {};
         float sqrt_discr = sqrtf(D);
         // Eltaroljuk egy vectorban a ket lehetseges t erteket, es hogy melyik valid. (valid jelentese hogy a palast h alatti reszen van)
         std::vector<std::pair<float, bool>> ts = {
-                {(-b + sqrt_discr) / (2 * a), false},
-                {(-b - sqrt_discr) / (2 * a), false}
+                {(-b + sqrt_discr) / (2.0f * a), false},
+                {(-b - sqrt_discr) / (2.0f * a), false}
         };
         // Beallitjuk a valid valtozokat.
         for (auto &t: ts) {
-            if (t.first > 0) {
+            if (t.first > 0.0f) {
                 Hit hit;
                 hit.t = t.first;
                 hit.position = s + hit.t * d;
@@ -550,9 +549,9 @@ public:
         Hit bestHit;
         for (Intersectable *object: objects) {
             Hit hit = object->intersect(ray); //  hit.t < 0 if no intersection
-            if (hit.t > 0 && (bestHit.t < 0 || hit.t < bestHit.t)) bestHit = hit;
+            if (hit.t > 0.0f && (bestHit.t < 0.0f || hit.t < bestHit.t)) bestHit = hit;
         }
-        if (dot(ray.dir, bestHit.normal) > 0) bestHit.normal = bestHit.normal * (-1);
+        if (dot(ray.dir, bestHit.normal) > 0.0f) bestHit.normal = bestHit.normal * (-1.0f);
         return bestHit;
     }
 
@@ -571,7 +570,7 @@ public:
             Ray rayToLight = Ray(hit.position + hit.normal * epsilon,
                                  normalize(cone->light->position - hit.position));
             Hit hitToLight = firstIntersect(rayToLight);
-            if (hitToLight.t < 0) continue;
+            if (hitToLight.t < 0.0f) continue;
             // If the distance to the light is shorter than the distance to the hit, the light is visible.
             // Ha a kapott hit tavolsaga nagyobb, mint a feny tavolsaga, akkor a feny elerheto. (ezert emeltuk ki a kupbol egy kicsit a fenyt)
             if (length(hitToLight.position - hit.position) > length(cone->light->position - hit.position)) {
