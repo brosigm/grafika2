@@ -485,7 +485,7 @@ public:
 
         // Nehany random koordinata a kupoknak.
         Hit hRedCone = firstIntersect(camera.getRay(230, 150));
-        Hit hGreenCone = firstIntersect(camera.getRay(384, 469));
+        Hit hGreenCone = firstIntersect(camera.getRay(330, 500));
         Hit hBlueCone = firstIntersect(camera.getRay(324, 393));
 
         // Lehallgatokeszulekek letrehozasa.
@@ -645,13 +645,13 @@ public:
 };
 
 FullScreenTexturedQuad *fullScreenTexturedQuad;
-std::vector<vec4> image(windowWidth * windowHeight);
 
 // Initialization, create an OpenGL context
 void onInitialization() {
     glViewport(0, 0, windowWidth, windowHeight);
     scene.build();
 
+    std::vector<vec4> image(windowWidth * windowHeight);
     long timeStart = glutGet(GLUT_ELAPSED_TIME);
     scene.render(image);
     long timeEnd = glutGet(GLUT_ELAPSED_TIME);
@@ -685,6 +685,7 @@ void onMouse(int button, int state, int pX, int pY) {
         if (button == GLUT_LEFT_BUTTON) {
             // Bal klikk eseten ujrarajzoljuk a kepet a valltoztatasok utan.
             scene.refresh(pX, pY);
+            std::vector<vec4> image(windowWidth * windowHeight);
             scene.render(image);
             delete fullScreenTexturedQuad;
             fullScreenTexturedQuad = new FullScreenTexturedQuad(windowWidth, windowHeight, image);
