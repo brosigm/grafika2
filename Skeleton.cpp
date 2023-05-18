@@ -373,9 +373,9 @@ struct Cone : Intersectable {
 
         // Ezeket a kepleteket a ray-tracing pdf 11. diajan talalhato kepletek alapjan implementaltam.
         vec3 H = s - p;
-        float a = pow(dot(d, n), 2.0f) - dot(d, d) * pow(cosf(alfa), 2.0f);
-        float b = 2.0f * (dot(d, n) * dot(H, n) - dot(d, H) * pow(cosf(alfa), 2.0f));
-        float c = pow(dot(H, n), 2.0f) - dot(H, H) * pow(cosf(alfa), 2.0f);
+        float a = dot(d, n) * dot(d, n) - dot(d, d) * cosf(alfa) * cosf(alfa);
+        float b = 2.0f * (dot(d, n) * dot(H, n) - dot(d, H) * cosf(alfa) * cosf(alfa));
+        float c = dot(H, n) * dot(H, n) - dot(H, H) * cosf(alfa) * cosf(alfa);
 
         // A diszkriminans es a ket lehetseges t ertek kiszamitasa.
         float D = b * b - 4.0f * a * c;
@@ -484,8 +484,8 @@ public:
         objects.push_back(new DodecaHedron(vec3(-0.2f, 0.10f, -0.25f), 0.25f));
 
         // Nehany random koordinata a kupoknak.
-        Hit hRedCone = firstIntersect(camera.getRay(230, 200));
-        Hit hGreenCone = firstIntersect(camera.getRay(450, 500));
+        Hit hRedCone = firstIntersect(camera.getRay(230, 150));
+        Hit hGreenCone = firstIntersect(camera.getRay(384, 469));
         Hit hBlueCone = firstIntersect(camera.getRay(324, 393));
 
         // Lehallgatokeszulekek letrehozasa.
